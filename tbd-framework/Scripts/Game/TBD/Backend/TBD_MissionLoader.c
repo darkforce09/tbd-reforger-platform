@@ -248,8 +248,10 @@ class TBD_MissionLoader
 	{
 		s_RawJson = data;
 
+		// Parse a JSON string: JsonLoadContext.LoadFromString (ImportFromString /
+		// SCR_JsonLoadContext are both flagged obsolete by the engine).
 		JsonLoadContext ctx = new JsonLoadContext();
-		if (!ctx.ImportFromString(data))
+		if (!ctx.LoadFromString(data))
 		{
 			Print("[TBD] Mission JSON parse failed.", LogLevel.ERROR);
 			return false;
