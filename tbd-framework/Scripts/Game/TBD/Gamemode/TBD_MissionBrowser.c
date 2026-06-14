@@ -8,6 +8,67 @@ modded class SCR_PlayerController
 {
 	//! Client-side cache of the last received mission list (display lines).
 	protected ref array<string> m_TBD_MissionLines;
+	protected int m_TBD_CycleIndex = 0;
+	protected bool m_TBD_ListenersRegistered = false;
+
+	//------------------------------------------------------------------------------------------------
+	//! Register the admin keybinds on the local client once it owns this controller.
+	//! Input actions "TBD_MissionCycle" / "TBD_MissionLoad" are defined in the mod's
+	//! input config (bind keys in Workbench); listeners are a no-op until they exist.
+	override void OnControlledEntityChanged(IEntity from, IEntity to)
+	{
+		super.OnControlledEntityChanged(from, to);
+		TBD_TryRegisterListeners();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void TBD_TryRegisterListeners()
+	{
+		if (m_TBD_ListenersRegistered)
+			return;
+		if (GetGame().GetPlayerController() != this)
+			return; // local client's controller only
+
+		InputManager im = GetGame().GetInputManager();
+		if (!im)
+			return;
+
+		im.AddActionListener("TBD_MissionCycle", EActionTrigger.DOWN, TBD_OnCycleAction);
+		im.AddActionListener("TBD_MissionLoad", EActionTrigger.DOWN, TBD_OnLoadAction);
+		m_TBD_ListenersRegistered = true;
+		Print("[TBD][browser] admin mission keybinds registered (TBD_MissionCycle / TBD_MissionLoad).");
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Cycle key: first press fetches the list; subsequent presses step through it.
+	protected void TBD_OnCycleAction(float value, EActionTrigger trigger)
+	{
+		if (!m_TBD_MissionLines || m_TBD_MissionLines.IsEmpty())
+		{
+			Print("[TBD][browser] fetching mission list…");
+			TBD_RequestMissionList();
+			return;
+		}
+
+		m_TBD_CycleIndex = m_TBD_CycleIndex + 1;
+		if (m_TBD_CycleIndex >= m_TBD_MissionLines.Count())
+			m_TBD_CycleIndex = 0;
+
+		Print(string.Format("[TBD][browser] > %1   (press Load to apply)", m_TBD_MissionLines[m_TBD_CycleIndex]));
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Load key: request the server to switch to the currently highlighted mission.
+	protected void TBD_OnLoadAction(float value, EActionTrigger trigger)
+	{
+		if (!m_TBD_MissionLines || m_TBD_MissionLines.IsEmpty())
+		{
+			Print("[TBD][browser] no mission selected — press Cycle first.");
+			return;
+		}
+		Print(string.Format("[TBD][browser] loading mission #%1…", m_TBD_CycleIndex + 1));
+		TBD_RequestSelectMission(m_TBD_CycleIndex + 1);
+	}
 
 	//------------------------------------------------------------------------------------------------
 	// CLIENT (owner) -> SERVER: ask for the current mission list.
