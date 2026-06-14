@@ -13,6 +13,7 @@ Tbdevent_Website/web/dist/
 
 # --- Enfusion MCP bridge handlers (dev-only, re-injected by the MCP) ---
 tbd-framework/Scripts/WorkbenchGame/
+tbd-framework/UserMaps.desc
 
 # --- Logs / OS / editor cruft ---
 *.log
