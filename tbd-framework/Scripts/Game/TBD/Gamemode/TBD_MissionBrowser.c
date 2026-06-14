@@ -139,15 +139,15 @@ class TBD_MissionBrowserService
 		if (!entries || entries.IsEmpty())
 			return "No missions loaded yet.";
 
-		string out;
+		string result;
 		for (int i = 0; i < entries.Count(); i++)
 		{
 			TBD_MissionListEntry e = entries[i];
 			if (i > 0)
-				out = out + "\n";
-			out = out + string.Format("%1) %2 [%3] %4 slots", i + 1, e.name, e.terrain, e.slotCount);
+				result = result + "\n";
+			result = result + string.Format("%1) %2 [%3] %4 slots", i + 1, e.name, e.terrain, e.slotCount);
 		}
-		return out;
+		return result;
 	}
 
 	//------------------------------------------------------------------------------------------------
