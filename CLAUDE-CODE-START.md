@@ -21,10 +21,11 @@
 
 - Schema **1.1** (`slots[]` required) · registry POC 0.4 · REST spike 0.1
 - Mission loader: `GET /api/missions/{id}/compiled` + `$profile:missions/{id}.json` fallback
-- **Per-slot spawn:** `TBD_SpawnManager` + modded `SCR_MenuSpawnLogic` — Workbench verified 2026-06-14
-- Web Phase 1 **backend**: link codes, roster, mission publish, ORBAT slot assignment (migration 00004)
+- **Per-slot spawn:** `TBD_SpawnManager` + modded `SCR_MenuSpawnLogic` — verified on staging dedicated server 2026-06-14
+- Web Phase 1 **backend**: link codes, roster, mission publish, ORBAT slot assignment (migration 00004), **`GET /api/missions` list**
 - Dev scenario: `Missions/TBD_Dev_POC.conf` on Eden subscene with `TBD_GameMode.et` prefab
-- Staging deploy scripts for `192.168.0.140` — see [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md)
+- **Staging LAN join WORKS** — mod published to Workshop, `-config` mode, client Direct-Joined + spawned (see [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md))
+- **Mission browser** — backend + game logic + admin-gated client↔server RPC + keybind trigger all built & compile; only the 2 input actions remain (CLAUDE-CONTINUATION.md §16)
 - Repo on GitHub: `darkforce09/tbd-reforger-platform`
 
 ---
@@ -32,10 +33,10 @@
 ## Phase 1 — what to build next
 
 1. ~~**Staging LAN pass**~~ ✓ DONE 2026-06-14 — `tbd-framework` published to Workshop, staging runs `-config` mode, client Direct-Joined and spawned at a slot (see [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md) → "Client join")
-2. **Capture / win condition** — at least one objective
-3. **Full ORBAT enforcement** — roster identity → assigned slot (round-robin works without linking)
-4. **Stage machine** — `LOADING → LOBBY → BRIEFING → SAFE_START → LIVE → END → DEBRIEF`
-5. **Admin commands** — `#stage next`, `#end blufor`, etc.
+2. **Finish the mission browser** — define the 2 input actions (`TBD_MissionCycle`/`TBD_MissionLoad`) so the admin keybind fires the RPC. Everything else is done + compiles. Full handoff in [`CLAUDE-CONTINUATION.md`](CLAUDE-CONTINUATION.md) **§16**; read **§17 gotchas first**.
+3. **Capture / win condition** — at least one objective
+4. **Full ORBAT enforcement** — roster identity → assigned slot (round-robin works without linking)
+5. **Stage machine** — `LOADING → LOBBY → BRIEFING → SAFE_START → LIVE → END → DEBRIEF`
 6. **Web UI** — mission upload, slot assignment, identity linking (APIs exist)
 
 See [`MILESTONES.md`](MILESTONES.md) for Milestone #1 success criteria.
@@ -87,7 +88,7 @@ cp scripts/deploy.env.example scripts/deploy.env
 bash scripts/deploy-staging.sh
 ```
 
-**Important:** Local mods use `-server` + `-addons`. Do **not** pass `-config` with `-addons`.
+**Important:** **Local** dev uses `-server` + `-addons` (do **not** pass `-config` with `-addons`). **Staging** now uses **`-config` mode** with the **Workshop** mod (`TBD_SERVER_MODE=config` in `deploy.env`) — that's the only Direct-Joinable mode; `-server`+`-addons` registers no backend room. `deploy-staging.sh` supports both (`TBD_SERVER_MODE=addons|config`).
 
 **Success log lines:**
 
@@ -123,6 +124,14 @@ bash scripts/manual-test.sh
 - `RestCallback.SetOnTimeout` — **removed** from `TBD_MissionLoader.c` (not on current API)
 - Prefer `JsonLoadContext` over obsolete `SCR_JsonLoadContext` when touching loader
 - `TBD_GameMode.et` prefab includes `RplComponent` — do not duplicate in world layer
+
+## Enfusion / Workbench gotchas (READ — cost hours on 2026-06-14; full list in CLAUDE-CONTINUATION.md §17)
+
+- **`out` is a reserved keyword**; **no ternary `?:`** in Enforce.
+- **The local dedicated-server compile check is UNRELIABLE for *new* .c files** (cached resourceDatabase.rdb skips them). **Verify compiles in Workbench** via the MCP: `wb_connect` → `wb_reload {scripts}` → grep `compatdata/1874910/.../ArmaReforgerWorkbench/logs/logs_*/console.log` for `Can't compile`/`(E):`.
+- **Publishing packs `data.pak`+`meta` into the addon dir → Workbench marks it read-only** (padlock). Delete `tbd-framework/{data.pak,meta,ServerData.json,*_manifest.json}` (gitignored) after each publish, then restart the Launcher.
+- **Chat is dead on the dedicated TBD scenario** (no `ScriptedChatEntity`). Admin input on dedicated = client→server RPC (`modded SCR_PlayerController` + `RplRpc`), not chat.
+- enfusion-mcp **can't launch** Workbench here (Linux/Proton) — launch via Steam; then `project_read`/`project_write`/`wb_reload` work over the bridge.
 
 ---
 

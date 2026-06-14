@@ -191,6 +191,7 @@ Partner repo (external): `tbd-voip` — voice client, server, game bridge.
 **Phase 1 — backend (done; UI pending):**
 
 - `POST /api/missions` (admin, schema-validated upload)
+- `GET /api/missions` (server token — **mission list** for the in-game admin browser; `{missions:[{id,name,terrain,slotCount,...}],count}`; merges DB + disk like `/compiled`) — added 2026-06-14
 - `POST /api/link` (server token — register 6-digit code)
 - `POST /api/me/link` (user consumes code)
 - `GET /api/game/events/{id}/roster` (server token — identityId → slotId)
@@ -216,7 +217,8 @@ Partner repo (external): `tbd-voip` — voice client, server, game bridge.
 - `TBD_FrameworkManager.c`, `TBD_GameStage.c`, radio bridge stubs
 - `TBD_GameMode.et` prefab (manager + RplComponent; **no** Registry POC on game mode)
 - Dev scenario: Eden subscene + `Missions/TBD_Dev_POC.conf`
-- **Workbench verified (2026-06-14):** 18× built slot spawn, assigned slot, spawn requested
+- **Verified on the staging dedicated server (2026-06-14):** 18× built slot spawn, Stage → LOBBY, mission + roster loaded
+- **Mission browser (in progress — see §16):** `TBD_MissionListLoader.c` (list fetch), `TBD_BackendConfig` write-back (`SetMissionId`/`SetBackend`), `TBD_FrameworkManager` select+reload, `TBD_ScenarioRouter.c`, `TBD_AdminCommands.c` (chat — **inactive**, no chat entity), `TBD_MissionBrowser.c` (modded `SCR_PlayerController` RPC backbone + keybind trigger). All compile in Workbench.
 
 ### Ops scripts
 
@@ -228,9 +230,12 @@ Partner repo (external): `tbd-voip` — voice client, server, game bridge.
 
 ### Not done yet
 
-- Framework: full ORBAT enforcement (identity linking), capture objective, admin commands, results POST wiring
+- Framework: full ORBAT enforcement (identity linking), capture objective, results POST wiring
+- **Mission browser — last 5%:** the only missing piece is a client **input action** to fire the RPC (see §16). Backend + game logic + RPC + trigger code all done/compile.
+- **Cross-terrain mission switch:** needs a generic TBD scenario built on Arland (Workbench) + `RequestScenarioChangeTransition` arg verification (§16).
 - Web: mission upload UI, slot assignment UI, results on event page
-- ~~Staging LAN join on 192.168.0.140~~ **DONE 2026-06-14** — `tbd-framework` published to Workshop (modId = gproj GUID `B2C3D4E5F6A78901`), staging runs `-config` mode, client Direct-Joined and spawned at a US slot (server logged authenticated player + faction join). See section 10.
+- ~~Staging LAN join on 192.168.0.140~~ **DONE 2026-06-14** — `tbd-framework` published to Workshop (modId = gproj GUID `B2C3D4E5F6A78901`), staging runs `-config` mode, client Direct-Joined and spawned at a US slot. See §10.
+- **SECURITY (open):** a `license.txt` containing PrairieLearn secrets (Google OAuth client secret, DB pw) was accidentally bundled into the published Workshop mod (v1.0.0/1.0.1). **Rotate those credentials**, remove/replace the file, and re-check the Workshop item.
 
 ---
 
@@ -242,12 +247,13 @@ Partner repo (external): `tbd-voip` — voice client, server, game bridge.
 
 Build in this order:
 
-1. ~~**Staging LAN join**~~ ✓ DONE 2026-06-14 — client Direct-Joined the `-config` + Workshop-mod server and spawned at a slot (section 10)
-2. **Capture objective** — win condition for internal test
-3. **Full ORBAT enforcement** — identity linking + roster slot assignment (round-robin spawn works today)
-4. **Stage machine + admin commands** — `#stage next`, safe start, boundary
-5. **Web admin UI** — mission upload, slot assignment, link-code UX
-6. **Results persistence** — wire `POST /api/results` to DB + event page
+1. ~~**Staging LAN join**~~ ✓ DONE 2026-06-14 — client Direct-Joined the `-config` + Workshop-mod server and spawned at a slot (§10)
+2. **Finish the mission browser (§16)** — define the 2 input actions so the admin keybind fires the RPC; then cross-terrain (Arland scenario). Everything else is done + compiles.
+3. **Capture objective** — win condition for internal test
+4. **Full ORBAT enforcement** — identity linking + roster slot assignment (round-robin spawn works today)
+5. **Stage machine** — `#stage next`, safe start, boundary
+6. **Web admin UI** — mission upload, slot assignment, link-code UX
+7. **Results persistence** — wire `POST /api/results` to DB + event page
 
 ### Dedicated server (local dev)
 
@@ -306,6 +312,7 @@ See master plan section 2 for full schema outline example.
 | Endpoint | Auth | Status | Purpose |
 |---|---|---|---|
 | `GET /api/missions/{id}/compiled` | server token | ✓ | Mission JSON for loader |
+| `GET /api/missions` | server token | ✓ | Mission **list** for in-game admin browser (id/name/terrain/slotCount; DB+disk) |
 | `GET /api/game/events/{id}/roster` | server token | ✓ | identityId → slotId map |
 | `POST /api/link` | server token | ✓ | Bind 6-digit code → game identity |
 | `POST /api/me/link` | user session | ✓ | User consumes link code |
@@ -417,6 +424,8 @@ Cancel + Direct Join again connects. See `docs/STAGING-SERVER.md` → "Client jo
 | [`Tbdevent_Website/internal/server/server.go`](Tbdevent_Website/internal/server/server.go) | Route registration |
 | [`Tbdevent_Website/internal/migrate/migrations/00004_missions_orbat_identity.sql`](Tbdevent_Website/internal/migrate/migrations/00004_missions_orbat_identity.sql) | Missions + ORBAT schema |
 | [`Tbd_framework/REFERENCE-ONLY.md`](Tbd_framework/REFERENCE-ONLY.md) | Why not to open CRF in Workbench |
+| [`tbd-framework/Scripts/Game/TBD/Gamemode/TBD_MissionBrowser.c`](tbd-framework/Scripts/Game/TBD/Gamemode/TBD_MissionBrowser.c) | Admin mission browser RPC + keybind (the working transport; see §16) |
+| [`Tbdevent_Website/internal/handlers/gameserver.go`](Tbdevent_Website/internal/handlers/gameserver.go) | `GET /api/missions` list (+ `/compiled`, roster, results) |
 
 ---
 
@@ -438,3 +447,49 @@ When starting a new session:
 - [ ] For web: read existing handler patterns before adding routes
 - [ ] Do not commit unless user asks
 - [ ] Update section 6–7 of this file when completing milestones
+
+---
+
+## 16. Mission browser feature — handoff (in progress, 2026-06-14)
+
+**Goal:** the dedicated server pulls a mission **list** from a configurable webserver; an in-game **admin** browses + switches the active mission (Arma-3 style), any terrain, refreshable at runtime.
+
+### Done & verified
+- **Backend:** `GET /api/missions` (server-token) → `{missions:[{id,name,terrain,slotCount,schemaVersion,publishedAt}],count}`. `repository.ListMissions` + disk merge in `handlers/gameserver.go` (`MissionList`/`listDiskMissions`), `models.MissionSummary`/`MissionListResponse`, route in `server.go`. Unit tests green; **live-verified** on staging (returns 3 missions: `msn_8f3a2c` everon/18, `msn_2d91be` arland/0, `msn_levieus9` everon/9).
+- **Game (compiles in Workbench, live list-fetch verified):**
+  - `TBD_MissionListLoader.c` — REST `GET /api/missions` (mirrors `TBD_MissionLoader` pattern); server logged `MissionList: 3 missions available` on LOBBY.
+  - `TBD_BackendConfig.c` — `SetMissionId`/`SetBackend` write back to `$profile:TBD_BackendConfig.json` (survives a world reload).
+  - `TBD_FrameworkManager.c` — `BuildMissionListText`, `SelectMissionByNumber` (persist id → `GameStateTransitions.RequestScenarioRestart()` same-terrain / `RequestScenarioChangeTransition()` cross-terrain), `SetBackend`; list preloads on LOBBY.
+  - `TBD_ScenarioRouter.c` — terrain→scenario map (Everon wired; Arland TODO).
+  - `TBD_MissionBrowser.c` — **the transport that works on dedicated**: `modded SCR_PlayerController` with admin-gated client↔server RPCs (`TBD_RequestMissionList`/`TBD_RpcAsk_*`/`TBD_RpcDo_*`, `TBD_RequestSelectMission`) gated by `SCR_PlayerListedAdminManagerComponent.IsPlayerOnAdminList(GetPlayerId())`; plus a client keybind trigger (`AddActionListener("TBD_MissionCycle"/"TBD_MissionLoad", DOWN, …)`).
+- **Deploy:** `deploy-staging.sh` config mode renders `game.admins[]` from `TBD_ADMIN_IDENTITY_IDS` (set in `deploy.env`; Darkforce = `873f197a-5ff0-4c45-8f8a-554273c9a875`).
+
+### Dead end (do not retry): chat commands
+`TBD_AdminCommands.c` (modded `SCR_ChatComponent.OnNewMessage`, `#tbd` commands) is **inactive** — the `GameMode_Plain`-based TBD scenario has **no `ScriptedChatEntity`**, so chat is never processed (`Chat not available - missing ChatEntity`). Kept for reference only. Use the RPC path.
+
+### THE LAST 5% — define 2 input actions
+The keybind needs input actions **`TBD_MissionCycle`** + **`TBD_MissionLoad`** to exist. Verified-clean plan (avoids the giant-config override that crashed Workbench):
+1. Write a **tiny** `ActionManager` config with the 2 actions + a custom **`TBD_BrowserContext`** (`ActionRefs`) — format:
+   `Action TBD_MissionCycle { InputSource InputSourceValue { Input "keyboard:KC_F6" Filter InputFilterDown {} } }` (button = no `Type`). Contexts use `ActionRefs { "TBD_MissionCycle" }`.
+2. Activate it from script: `GetGame().GetInputManager().ActivateContext("TBD_BrowserContext")` in the local `SCR_PlayerController` (API verified to exist). Then `AddActionListener` fires.
+3. **Open question to resolve first:** does a *separate* mod input config get loaded/merged, or must it sit at the base path `Configs/System/chimeraInputCommon.conf` (which *replaces* and crashed on full-copy save)? Base config GUID needed for an override. Iterate via the WB MCP (`project_write` → `wb_reload` → check WB log). Write files directly (bypasses WB read-only + the crashy WB "save").
+
+### Cross-terrain (after the keybind)
+Build a generic TBD scenario on **Arland** in Workbench (`worlds/TBD_Arland.ent` SubScene of `worlds/Arland/Arland.ent`, same `TBD_GameMode`, `Missions/TBD_Arland.conf`), register its `.conf` GUID in `TBD_ScenarioRouter`, verify `RequestScenarioChangeTransition(scenario, worldSystemsConfig, addonList)` args at runtime. An Arland mission with `slots[]` is also needed (sample `msn_2d91be` has 0).
+
+### How to test
+Republish the mod → `deploy-staging.sh` (config mode pulls new version + admins) → join → press the keybinds → watch staging `console.log` for `[TBD][browser]` lines + a world reload into the new mission.
+
+---
+
+## 17. Enfusion / Workbench gotchas (learned the hard way — 2026-06-14)
+
+- **`out` is a reserved Enforce keyword** (out-params). Never name a variable `out` (compiles as "Broken expression (missing ';'?)").
+- **No ternary `?:`** in Enforce — use `if`/`else`.
+- **The local dedicated-server compile check is UNRELIABLE for *new* files** — it reuses a cached `resourceDatabase.rdb` and silently skips newly-added scripts (same file/class count + CRC across runs = it didn't recompile). **Workbench is the authoritative compiler.** Verify via the MCP: `wb_connect` → `wb_reload {target:scripts}` → grep the WB log (`compatdata/1874910/.../ArmaReforgerWorkbench/logs/logs_*/console.log`) for `Can't compile` / `(E):`. (Editing *existing* files does recompile locally; adding files does not.)
+- **Publishing packs `data.pak` + `meta` into the source addon dir → Workbench/Launcher treat it as a read-only packed addon** (padlock). Fix: delete `tbd-framework/{data.pak,meta,ServerData.json,*_manifest.json}` (gitignored) after each publish. If the launcher still shows it locked, restart it (it scans at startup). The Workshop link is the gproj **GUID**, not these files — safe to delete.
+- **Read-only after a Workbench crash** = no editable project loaded (`wb_projects list` → "No projects loaded"). Reopen the project via the Launcher (Open `addon.gproj`); the MCP `wb_projects open` may return `false` on this Linux/Proton box.
+- **Chat doesn't work on a `GameMode_Plain` dedicated scenario** (no `ScriptedChatEntity`). For admin input on dedicated, use **client→server RPC** (`modded SCR_PlayerController` + `[RplRpc(...Server/Owner)]` + `Rpc(...)`), not chat.
+- **Direct Join resolves via the BI backend room registry**, not a raw `:2001` probe. Only `-config` mode registers a room; `-server`+`-addons` is **not** joinable. A2S lives on **17777** (must differ from game port `2001` or replication fails). See [[staging-a2sport-collision]] in memory.
+- **WB MCP bridge** (this Linux/Proton box): `wb_connect`, `wb_reload`, `project_read`/`project_write` (bypass WB read-only), `wb_projects`. `wb_reload` returns `ExecuteAction=false` but does trigger a reload — confirm via the WB log, not the return value. enfusion-mcp **cannot launch** Workbench; launch via Steam.
+- **`config_create`** (MCP) supports faction/mission-header/entity-catalog/editor-placeables only — **not** input configs.
