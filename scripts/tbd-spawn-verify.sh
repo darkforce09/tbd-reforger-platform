@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PATTERN="${1:-SpawnManager: built spawn point for|SpawnManager: assigned slot|TBD_SpawnLogic|built slot spawn}"
+PATTERN="${1:-built slot spawn|SpawnLogic: spawn requested|assigned slot}"
 LOG_DIR="$HOME/Documents/Games/ArmaReforgerWorkbench/logs"
 PROTON_LOG_DIR="$HOME/.local/share/Steam/steamapps/compatdata/1874910/pfx/drive_c/users/steamuser/Documents/My Games/ArmaReforgerWorkbench/logs"
 
