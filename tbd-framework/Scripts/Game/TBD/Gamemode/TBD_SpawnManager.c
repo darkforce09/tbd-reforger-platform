@@ -1,22 +1,25 @@
-[ComponentEditorProps(category: "TBD/Framework", description: "Server-only Phase 1 player spawner — round-robin faction assignment + spawn on SAFE_START.")]
+[ComponentEditorProps(category: "TBD/Framework", description: "Server-only: slot assignment + per-slot SCR_SpawnPoint entities from mission JSON.")]
 class TBD_SpawnManagerClass : SCR_BaseGameModeComponentClass {}
 
-//! Phase 1 player spawn. Authority-side: assigns each connecting player a faction
-//! (round-robin blufor/opfor), then spawns + possesses them when the mission reaches SAFE_START.
+//! Builds one SCR_SpawnPoint per mission slots[] entry at exact JSON coordinates.
+//! Assigns each player a slot (roster identity → slotId, else round-robin).
 class TBD_SpawnManager : SCR_BaseGameModeComponent
 {
+	protected const ResourceName SPAWN_POINT_PREFAB = "{E7F4D5562F48DDE4}Prefabs/MP/Spawning/SpawnPoint_Base.et";
+
 	protected static TBD_SpawnManager s_Instance;
 
-	protected ref map<int, string> m_mPlayerFaction;
-	protected ref set<int> m_aSpawned;
+	protected ref map<int, ref TBD_MissionSlotStruct> m_mPlayerSlot;
+	protected ref map<string, SCR_SpawnPoint> m_mSlotSpawnPoints;
 	protected int m_iRoundRobin;
+	protected bool m_bSlotSpawnPointsBuilt;
 
 	//------------------------------------------------------------------------------------------------
 	void TBD_SpawnManager(IEntityComponentSource src, IEntity ent, IEntity parent)
 	{
 		s_Instance = this;
-		m_mPlayerFaction = new map<int, string>();
-		m_aSpawned = new set<int>();
+		m_mPlayerSlot = new map<int, ref TBD_MissionSlotStruct>();
+		m_mSlotSpawnPoints = new map<string, SCR_SpawnPoint>();
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -29,110 +32,144 @@ class TBD_SpawnManager : SCR_BaseGameModeComponent
 	override void OnPlayerConnected(int playerId)
 	{
 		super.OnPlayerConnected(playerId);
-		AssignFaction(playerId);
 	}
 
 	//------------------------------------------------------------------------------------------------
 	override void OnPlayerAuditSuccess(int playerId)
 	{
 		super.OnPlayerAuditSuccess(playerId);
-		AssignFaction(playerId);
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Round-robin faction assignment, idempotent per player.
-	protected void AssignFaction(int playerId)
+	//! Assign mission slot to player (roster or round-robin). Idempotent per player.
+	void AssignSlotForPlayer(int playerId)
 	{
-		if (m_mPlayerFaction.Contains(playerId))
+		if (m_mPlayerSlot.Contains(playerId))
 			return;
 
-		string faction;
-		if (m_iRoundRobin % 2 == 0)
-			faction = "blufor";
-		else
-			faction = "opfor";
-
-		m_iRoundRobin++;
-		m_mPlayerFaction.Insert(playerId, faction);
-		Print("[TBD] SpawnManager: player " + playerId + " -> " + faction);
-	}
-
-	//------------------------------------------------------------------------------------------------
-	//! Driven by TBD_FrameworkManager.SetStage. Spawns every tracked player once SAFE_START begins.
-	void OnStageChanged(TBD_EGameStage stage)
-	{
-		if (stage != TBD_EGameStage.SAFE_START)
-			return;
-
-		foreach (int playerId, string faction : m_mPlayerFaction)
+		array<ref TBD_MissionSlotStruct> slots = TBD_MissionLoader.GetSlots();
+		if (!slots || slots.IsEmpty())
 		{
-			SpawnPlayer(playerId, faction);
-		}
-	}
-
-	//------------------------------------------------------------------------------------------------
-	protected void SpawnPlayer(int playerId, string faction)
-	{
-		if (m_aSpawned.Contains(playerId))
-			return;
-
-		string kitAlias = KitAliasForFaction(faction);
-		if (kitAlias.IsEmpty())
-		{
-			Print("[TBD] SpawnManager: no kit for faction '" + faction + "'.", LogLevel.ERROR);
+			Print("[TBD] SpawnManager: no mission slots — cannot assign player " + playerId, LogLevel.ERROR);
 			return;
 		}
 
-		bool ok;
-		ResourceName prefab = TBD_Registry.Resolve(kitAlias, ok);
-		if (!ok)
-			return;
-
-		vector pos = TBD_MissionLoader.GetSpawnZoneForFaction(faction);
-
-		IEntity body = SpawnPrefab(prefab, pos);
-		if (!body)
+		string slotId = ResolveSlotIdForPlayer(playerId);
+		TBD_MissionSlotStruct slot = TBD_MissionLoader.GetSlotById(slotId);
+		if (!slot)
 		{
-			Print("[TBD] SpawnManager: spawn failed for player " + playerId, LogLevel.ERROR);
-			return;
+			// Round-robin fallback when roster slot id unknown
+			int idx = m_iRoundRobin % slots.Count();
+			slot = slots[idx];
+			m_iRoundRobin++;
 		}
 
-		SCR_PlayerController pc = SCR_PlayerController.Cast(GetGame().GetPlayerManager().GetPlayerController(playerId));
-		if (pc)
-			pc.SetInitialMainEntity(body);
-
-		m_aSpawned.Insert(playerId);
-		Print("[TBD] Spawned " + playerId + " at " + pos.ToString());
+		m_mPlayerSlot.Insert(playerId, slot);
+		Print(string.Format("[TBD] SpawnManager: assigned slot %1 to player %2 at (%3)", slot.id, playerId, slot.x.ToString() + "," + slot.z.ToString()));
 	}
 
 	//------------------------------------------------------------------------------------------------
-	protected string KitAliasForFaction(string faction)
+	protected string ResolveSlotIdForPlayer(int playerId)
 	{
-		if (faction == "blufor")
-			return "kit:us_rifleman";
+		if (!TBD_RosterLoader.IsLoaded())
+			return string.Empty;
 
-		if (faction == "opfor")
-			return "kit:sov_rifleman";
+		string identityId = string.Format("%1", SCR_PlayerIdentityUtils.GetPlayerIdentityId(playerId));
+		if (identityId.IsEmpty())
+			return string.Empty;
 
+		return TBD_RosterLoader.GetSlotForIdentity(identityId);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	TBD_MissionSlotStruct GetAssignedSlot(int playerId)
+	{
+		return m_mPlayerSlot.Get(playerId);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	SCR_SpawnPoint GetSpawnPointForSlot(string slotId)
+	{
+		return m_mSlotSpawnPoints.Get(slotId);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Engine faction key for mission faction key.
+	string EngineFactionKey(string missionFactionKey)
+	{
+		switch (missionFactionKey)
+		{
+			case "blufor": return "US";
+			case "opfor": return "USSR";
+		}
 		return string.Empty;
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! Mirrors TBD_RegistryPocComponent.SpawnPrefab — Resource.Load + world-space EntitySpawnParams.
-	protected IEntity SpawnPrefab(ResourceName prefab, vector position)
+	//! Authority-only: one SCR_SpawnPoint per mission slots[] at exact JSON coordinates.
+	void BuildMissionSlotSpawnPoints()
 	{
-		Resource resource = Resource.Load(prefab);
-		if (!resource || !resource.IsValid())
+		if (m_bSlotSpawnPointsBuilt)
+			return;
+
+		array<ref TBD_MissionSlotStruct> slots = TBD_MissionLoader.GetSlots();
+		if (!slots || slots.IsEmpty())
 		{
-			Print("[TBD] Resource.Load failed for " + prefab, LogLevel.ERROR);
-			return null;
+			Print("[TBD] SpawnManager: no mission slots — cannot build spawn points.", LogLevel.ERROR);
+			return;
 		}
 
-		EntitySpawnParams params = new EntitySpawnParams();
-		params.TransformMode = ETransformMode.WORLD;
-		Math3D.MatrixIdentity4(params.Transform);
-		params.Transform[3] = position;
+		Resource resource = Resource.Load(SPAWN_POINT_PREFAB);
+		if (!resource || !resource.IsValid())
+		{
+			Print("[TBD] SpawnManager: spawn point prefab failed to load.", LogLevel.ERROR);
+			return;
+		}
 
-		return GetGame().SpawnEntityPrefab(resource, GetGame().GetWorld(), params);
+		int built = 0;
+		foreach (TBD_MissionSlotStruct slot : slots)
+		{
+			if (!slot)
+				continue;
+
+			string engineKey = EngineFactionKey(slot.faction);
+			if (engineKey.IsEmpty())
+				continue;
+
+			float x = slot.x;
+			float z = slot.z;
+			vector pos = Vector(x, GetGame().GetWorld().GetSurfaceY(x, z), z);
+
+			EntitySpawnParams params = new EntitySpawnParams();
+			params.TransformMode = ETransformMode.WORLD;
+			Math3D.MatrixIdentity4(params.Transform);
+			params.Transform[3] = pos;
+
+			// Apply heading from JSON (yaw around Y)
+			float yawRad = slot.headingDeg * Math.DEG2RAD;
+			params.Transform[0] = Vector(Math.Cos(yawRad), 0, Math.Sin(yawRad));
+			params.Transform[2] = Vector(-Math.Sin(yawRad), 0, Math.Cos(yawRad));
+
+			IEntity ent = GetGame().SpawnEntityPrefab(resource, GetGame().GetWorld(), params);
+			SCR_SpawnPoint sp = SCR_SpawnPoint.Cast(ent);
+			if (!sp)
+			{
+				Print("[TBD] SpawnManager: failed to spawn SCR_SpawnPoint for " + slot.id, LogLevel.ERROR);
+				continue;
+			}
+
+			sp.SetFactionKey(engineKey);
+			m_mSlotSpawnPoints.Insert(slot.id, sp);
+			built++;
+			Print(string.Format("[TBD] SpawnManager: built slot spawn %1 (%2) kit %3 at %4", slot.id, engineKey, slot.kit, pos.ToString()));
+		}
+
+		if (built > 0)
+			m_bSlotSpawnPointsBuilt = true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	void OnStageChanged(TBD_EGameStage stage)
+	{
 	}
 }

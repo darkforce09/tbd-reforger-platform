@@ -51,7 +51,22 @@ class TBD_FrameworkManager : SCR_BaseGameModeComponent
 		if (!TBD_MissionLoader.IsLoaded())
 			return;
 
+		if (!TBD_MissionLoader.IsValid())
+		{
+			Print("[TBD] Mission loaded but invalid — staying in LOADING.", LogLevel.ERROR);
+			return;
+		}
+
 		GetGame().GetCallqueue().Remove(TickLoading);
+
+		TBD_Registry.Load();
+
+		TBD_SpawnManager sm = TBD_SpawnManager.GetInstance();
+		if (sm)
+			sm.BuildMissionSlotSpawnPoints();
+
+		TBD_RosterLoader.BeginLoad();
+
 		SetStage(TBD_EGameStage.LOBBY);
 	}
 
@@ -78,7 +93,6 @@ class TBD_FrameworkManager : SCR_BaseGameModeComponent
 	//------------------------------------------------------------------------------------------------
 	protected void OnEnterLobby()
 	{
-		TBD_Registry.Load();
 		// ORBAT enforcement, briefing timers, and admin commands land in Phase 1 follow-ups.
 	}
 

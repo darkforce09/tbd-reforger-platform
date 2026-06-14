@@ -21,6 +21,16 @@
       "displayName": "US Squad Leader (POC — GL stand-in; replace with Character_US_SL in Workbench)"
     },
     {
+      "alias": "kit:us_tl",
+      "guid": "{0B3167BB0FB68110}Prefabs/Characters/Factions/BLUFOR/US_Army/Character_US_PL.et",
+      "displayName": "US Team Leader"
+    },
+    {
+      "alias": "kit:us_ar",
+      "guid": "{5B1996C05B1E51A4}Prefabs/Characters/Factions/BLUFOR/US_Army/Character_US_AR.et",
+      "displayName": "US Automatic Rifleman"
+    },
+    {
       "alias": "preset:sov_vdv",
       "guid": "{DCB41B3746FDD1BE}Prefabs/Characters/Factions/OPFOR/USSR_Army/Character_USSR_Rifleman.et",
       "displayName": "Soviet VDV (POC — preset resolves to rifleman until TBD-Content)"
@@ -29,6 +39,16 @@
       "alias": "kit:sov_rifleman",
       "guid": "{DCB41B3746FDD1BE}Prefabs/Characters/Factions/OPFOR/USSR_Army/Character_USSR_Rifleman.et",
       "displayName": "USSR Rifleman"
+    },
+    {
+      "alias": "kit:sov_sl",
+      "guid": "{5436629450D8387A}Prefabs/Characters/Factions/OPFOR/USSR_Army/Character_USSR_SL.et",
+      "displayName": "USSR Squad Leader"
+    },
+    {
+      "alias": "kit:sov_ar",
+      "guid": "{23ADBBC31B6A3DC6}Prefabs/Characters/Factions/OPFOR/USSR_Army/Character_USSR_AR.et",
+      "displayName": "USSR Automatic Rifleman"
     },
     {
       "alias": "veh:m151_mg",
