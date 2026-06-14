@@ -17,6 +17,8 @@ partner VOIP bridge. Version it carefully.
 | [`bridge/bridge-messages.schema.json`](bridge/bridge-messages.schema.json) | JSON Schema for bridge messages |
 | [`bridge/samples/`](bridge/samples/) | Canonical bridge message examples |
 | [`spikes/voip-spike-brief.md`](spikes/voip-spike-brief.md) | Phase 0.2 brief handed to the partner VOIP track |
+| [`spikes/registry-poc-0.4.md`](spikes/registry-poc-0.4.md) | Registry alias → GUID POC (GREEN) |
+| [`spikes/rest-spike-0.1.md`](spikes/rest-spike-0.1.md) | REST loop spike (GREEN) |
 
 ## Rules
 

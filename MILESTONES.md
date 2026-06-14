@@ -2,9 +2,8 @@
 
 Every phase ends with a real event on real infrastructure (design pillar 5).
 Dates below are **proposed targets** anchored to the plan's phase estimates from a
-2026-06-13 start. A real, publicly posted date is the only scheduling tool that
-works for community projects — confirm Milestone #1 in Discord and replace
-"proposed" with "confirmed" once posted.
+2026-06-13 start. Milestone #1 is **announced on the website**; post in Discord
+from [`docs/discord-milestone-1-post.md`](docs/discord-milestone-1-post.md) when ready.
 
 | Milestone | Proposed date | Phase | Gate |
 |---|---|---|---|
@@ -15,7 +14,7 @@ works for community projects — confirm Milestone #1 in Discord and replace
 
 ## Milestone #1 — First manual event
 
-- **Date:** Saturday 2026-08-22 — **announced on the event website** (Discord: paste from [`docs/discord-milestone-1-post.md`](docs/discord-milestone-1-post.md)).
+- **Date:** Saturday 2026-08-22 — announced on the event website.
 - **Scale:** 20-40 players, internal test.
 - **Mission:** hand-written Mission JSON (e.g.
   [`tbd-schema/golden-missions/bridgehead-at-levie.json`](tbd-schema/golden-missions/bridgehead-at-levie.json)),
@@ -24,22 +23,23 @@ works for community projects — confirm Milestone #1 in Discord and replace
 
 ### Success criteria
 
-- [ ] Mission loads on the dedicated server from the backend REST endpoint
-      (file fallback proven as backup).
-- [ ] Slots enforce: players get the role they were assigned; no free-for-all.
-- [ ] A side wins via a real win condition (capture / hold / elimination).
-- [ ] Results POSTed back to the backend and visible on the event page.
-- [ ] Nobody needed Workbench to play.
+- [x] Mission loads on the dedicated server from the backend REST endpoint
+- [x] File fallback proven as backup (`$profile:missions/{id}.json`)
+- [ ] Slots enforce: players get the role they were assigned; no free-for-all
+- [ ] A side wins via a real win condition (capture / hold / elimination)
+- [ ] Results POSTed back to the backend and visible on the event page
+- [ ] Nobody needed Workbench to play
 
 ### Entry checklist (must be done before the date)
 
-- [ ] Phase 0 spikes green: REST (0.1, done), registry (0.4), schema frozen (0.5).
-- [ ] Framework MVP: state machine, loader, spawner, capture objective, loadouts,
-      safe start, boundary, admin commands.
-- [ ] Web: mission upload + validation, event linked to a mission, manual ORBAT
-      assignment, identity linking.
-- [ ] Staging soak on the pinned game/mod version; golden-mission smoke test passes.
-- [ ] Event frozen 48 h in advance (no game/mod updates).
+- [x] Phase 0 spikes green: REST (0.1), registry (0.4), schema frozen (0.5)
+- [ ] Framework MVP: state machine, loader ✓, spawner, capture objective, loadouts,
+      safe start, boundary, admin commands
+- [ ] Web: mission upload + validation (API ✓, UI pending), event linked to mission,
+      manual ORBAT assignment (API ✓, UI pending), identity linking (API ✓, UI pending)
+- [ ] Staging soak on the pinned game/mod version; golden-mission smoke test passes
+- [ ] Event frozen 48 h in advance (no game/mod updates)
+- [ ] Discord announcement posted (draft ready)
 
 ---
 
@@ -74,5 +74,4 @@ works for community projects — confirm Milestone #1 in Discord and replace
 
 - Dates assume an evenings-and-weekends pace; pull them in if anyone goes
   near-full-time.
-- This file is the scheduling source of truth. Update statuses (proposed ->
-  confirmed -> done) as milestones land.
+- This file is the scheduling source of truth. Update checkboxes as criteria land.

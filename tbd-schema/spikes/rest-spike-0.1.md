@@ -1,7 +1,6 @@
 # Phase 0.1 — REST Spike (main team)
 
-> **Status:** GREEN (HTTP contract verified). The dedicated-server-side Enfusion
-> verification is the remaining step and is gated on the framework loader (Phase 1).
+> **Status:** GREEN (HTTP contract + Enfusion loader verified on dedicated server, 2026-06-13).
 
 ## Goal
 
@@ -60,7 +59,6 @@ the auth gate returning 401 without a valid token.
 
 - **HTTP contract: GO.** The backend serves missions and accepts results/telemetry
   under bearer auth, reusing the exact production handlers and middleware.
-- **Remaining:** wire the Enfusion mission loader (Phase 1) to perform the same
-  `GET`/`POST` from a live dedicated Reforger server, with the `$profile` file
-  fallback. Verify class names (`RestApi` / `RestContext`) via Enfusion MCP before
-  writing that script.
+- **Enfusion loader: GO.** `TBD_MissionLoader.c` performs the same `GET` from a live
+  dedicated server (`bash scripts/run-dev-server.sh`), caches to `$profile:missions/`,
+  with file fallback if the API is down. Verified 2026-06-13.

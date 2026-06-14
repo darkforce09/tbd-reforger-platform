@@ -2,7 +2,8 @@
 
 > **Purpose:** Live handoff document for Claude CLI (or any fresh session) to continue TBD Reforger platform work without re-deriving context from Cursor chat history. **Keep this file updated** as decisions change.
 >
-> **Last updated:** 2026-06-13 · **Workspace:** `/home/Samuel/Projects/Arma reforger`
+> **Last updated:** 2026-06-13 · **Workspace:** `/home/Samuel/Projects/Arma reforger`  
+> **Phase:** 1 · **GitHub:** `darkforce09/tbd-reforger-platform`
 
 ---
 
@@ -57,11 +58,11 @@ TBD Event is building a **data-driven Arma Reforger event platform**:
 
 | Workstream | Owner | Repo |
 |---|---|---|
-| A — TBD-Framework | Main team (Samuel) | `tbd-framework` (to create) |
+| A — TBD-Framework | Main team (Samuel) | `tbd-framework/` (exists) |
 | B — Web platform | Main team | `Tbdevent_Website/` (exists) |
 | C — TBD Voice | **Partner** | `tbd-voip` (partner) |
-| D — Content/registry | Main team first | `tbd-content` (to create) |
-| Schema contract | Main team | `tbd-schema` (to create) |
+| D — Content/registry | Main team first | `tbd-content` (future) |
+| Schema contract | Main team | `tbd-schema/` (exists) |
 
 **Integration boundary:** Shared **bridge contract** in `tbd-schema` — how Mission JSON `radioPlan` maps to voice nets, and game↔client messages (`OnSpawn`, `OnDeath`, `OnNetChange`, `OnPTT`). Main team exposes hooks in framework; partner implements bridge + voice stack.
 
@@ -105,130 +106,158 @@ Key tools: `api_search`, `component_search`, `wiki_search`, `wiki_read`, `game_r
 
 ```
 /home/Samuel/Projects/Arma reforger/
+├── README.md                             # Project overview + quick start
 ├── tbd-reforger-platform-build-plan.md   # Original master plan (reference)
+├── CLAUDE-CODE-START.md                  # Claude Code entry (read first)
 ├── CLAUDE-CONTINUATION.md                # This file (live — keep updated)
 ├── MILESTONES.md                         # Milestone #1/#2 dates + criteria
-├── .cursor/mcp.json                      # enfusion-mcp enabled
+├── docs/                                 # Ops copy (Discord post, etc.)
+├── scripts/                              # Workbench, server profile, dev server, tests
+│   ├── setup-workbench-linux.sh
+│   ├── setup-server-profile.sh
+│   ├── run-dev-server.sh
+│   ├── tbd-dev-server.config.json        # For Workshop/config hosting (not local -addons)
+│   ├── test-phase1-api.sh
+│   └── manual-test.sh
+├── .local-test-profile/                  # Default dedicated-server profile (gitignored)
 ├── .github/workflows/schema.yml          # tbd-schema compatibility CI
-├── tbd-schema/                           # DONE: schema, golden missions, bridge contract
+├── tbd-schema/                           # Schema, golden missions, bridge contract
+│   ├── VERSION                           # 1.0.0
 │   ├── schema/mission.schema.json
 │   ├── schema/registry.schema.json
-│   ├── golden-missions/                  # 2 golden missions (validated)
-│   ├── registry/registry.example.json
-│   ├── bridge/                           # VOIP bridge contract + schema + samples
-│   ├── spikes/                           # REST 0.1 report + VOIP 0.2 brief/matrix
-│   └── scripts/validate.mjs              # npm run validate
-├── Tbdevent_Website/                     # Go + React — LIVE foundation
+│   ├── golden-missions/
+│   ├── registry/registry.vanilla-poc.json
+│   ├── bridge/
+│   └── spikes/                           # REST 0.1, registry 0.4, VOIP 0.2 brief
+├── tbd-framework/                          # Production Enfusion mod
+│   ├── addon.gproj                         # GUID B2C3D4E5F6A78901
+│   ├── Missions/TBD_Dev_POC.conf
+│   ├── worlds/TBD_Dev_POC.ent            # Eden subscene
+│   ├── Prefabs/Systems/TBD_GameMode.et
+│   ├── Scripts/Game/TBD/
+│   └── Data/registry.json, backend.example.json
+├── Tbdevent_Website/                     # Go + React — live foundation
 │   ├── cmd/server/main.go
-│   ├── cmd/restspike/                    # Phase 0.1 REST spike harness (no DB)
-│   ├── internal/handlers/                # pages, events, auth, admin, gameserver
-│   ├── internal/middleware/              # auth + servertoken
-│   ├── internal/migrate/migrations/      # 00001–00003
-│   ├── missions/                         # compiled missions served by game API
-│   ├── scripts/rest-spike.sh             # spike client
-│   └── web/src/                          # React SPA
-├── Tbd_framework/                        # CRF fork — REFERENCE ONLY
-└── (to create)
-    ├── tbd-framework/                    # Greenfield Enfusion mod
-    └── tbd-content/                      # Compositions, registry assets
+│   ├── internal/handlers/                  # pages, events, auth, gameserver, missions
+│   ├── internal/migrate/migrations/      # 00001–00004
+│   ├── missions/                         # compiled JSON for game API
+│   └── web/src/
+└── Tbd_framework/                        # CRF fork — REFERENCE ONLY (see REFERENCE-ONLY.md)
 ```
 
 Partner repo (external): `tbd-voip` — voice client, server, game bridge.
 
 ---
 
-## 6. What is already built (website)
+## 6. What is already built
 
-**Done in `Tbdevent_Website/`:**
+### Website (`Tbdevent_Website/`)
+
+**Foundation (pre–Phase 0):**
 
 - Discord OAuth + admin CMS (rules, compliance, server, mods pages)
-- Event hub: sidebar layout, events, announcements, dashboard
-- Discord sign-up with capacity/waitlist (`event_registrations` table)
+- Event hub: events, announcements, dashboard, sign-up with capacity/waitlist
 - Admin tabs: Content, Events, Announcements, Registrations
 
-**Done (Phase 0 — added in this pass):**
+**Phase 0 — game-server API:**
 
-- Server-token auth for game servers (`internal/middleware/servertoken.go`)
-- `GET /api/missions/{id}/compiled` (serves from `MISSIONS_DIR`)
-- `POST /api/results`, `POST /api/telemetry` (log-only)
-- REST spike harness (`cmd/restspike`) + client (`scripts/rest-spike.sh`) — loop verified
-- `tbd-schema`: Mission JSON schema v1, registry schema, 2 golden missions, VOIP bridge contract; `npm run validate` passes
-- Env: `GAME_SERVER_TOKENS`, `MISSIONS_DIR` in `.env.example`
+- Server-token auth (`internal/middleware/servertoken.go`)
+- `GET /api/missions/{id}/compiled` (disk, then DB when published)
+- `POST /api/results`, `POST /api/telemetry` (log-only for now)
+- REST spike harness (`cmd/restspike`) — GREEN
 
-**Not done (next):**
+**Phase 1 — backend (done; UI pending):**
 
-- `POST /api/link` (identity linking) + 6-digit lobby code
-- Mission JSON upload UI + schema validation in the web app
-- ORBAT role slotting (upgrade from headcount sign-up)
-- `GET /api/events/{id}/roster` returning identityId → slotId for the game server
-- Registry POC 0.4 (alias → GUID in Enfusion) and map tiles 0.3
-- TBD-Framework Enfusion mod (Phase 1)
+- `POST /api/missions` (admin, schema-validated upload)
+- `POST /api/link` (server token — register 6-digit code)
+- `POST /api/me/link` (user consumes code)
+- `GET /api/game/events/{id}/roster` (server token — identityId → slotId)
+- `GET /api/admin/events/{id}/slots`, `PUT /api/admin/events/{id}/slots/{slotId}` (manual ORBAT)
+- Migration `00004_missions_orbat_identity.sql`
+
+**Migrations:** `00001`–`00004`
+
+### Schema (`tbd-schema/`)
+
+- Mission + registry JSON Schema v1.0.0 (`VERSION`, `CHANGELOG.md`)
+- Two golden missions + `npm run validate` (CI in `.github/workflows/schema.yml`)
+- Registry POC file, VOIP bridge contract + samples
+- Spikes: REST 0.1 GREEN, registry 0.4 GREEN, VOIP 0.2 brief (partner)
+
+### Framework (`tbd-framework/`)
+
+- `TBD_BackendConfig.c`, `TBD_MissionLoader.c` (REST + profile fallback)
+- `TBD_Registry.c`, `TBD_RegistryPocComponent.c` (5 vanilla aliases)
+- `TBD_FrameworkManager.c`, `TBD_GameStage.c`, radio bridge stubs
+- `TBD_GameMode.et` prefab (manager + registry POC + RplComponent)
+- Dev scenario: Eden subscene + `Missions/TBD_Dev_POC.conf`
+- **Dedicated server verified:** mission from API + registry spawns ×5 on Linux
+
+### Ops scripts
+
+- `setup-workbench-linux.sh`, `setup-server-profile.sh`, `run-dev-server.sh`
+- `test-phase1-api.sh`, `manual-test.sh`, `seed-milestone-announcement.sh`
+
+### Not done yet
+
+- Framework: spawn/factions, ORBAT enforcement in-game, capture objective, admin commands, results POST wiring
+- Web: mission upload UI, slot assignment UI, results on event page
+- Map tiles spike 0.3 (Phase 2 wizard dependency)
 - Mission wizard (Phase 2)
-
-**Existing migrations:** `00001_init.sql`, `00002_seed_content.sql`, `00003_events_announcements.sql`
+- Discord milestone post (draft ready; website announcement seeded)
+- Staging soak + 48 h freeze before Milestone #1
 
 ---
 
 ## 7. Current focus — start here
 
-**→ Claude Code users:** read [`CLAUDE-CODE-START.md`](CLAUDE-CODE-START.md) first (Workbench bootstrap, API verification, MCP setup). Training data for Enfusion is ~3 years stale — use **enfusion-mcp** for every script change.
+**→ Claude Code:** read [`CLAUDE-CODE-START.md`](CLAUDE-CODE-START.md) first. Use a **new chat** for Phase 1 gameplay work.
 
-### Immediate priority: Workbench green on `tbd-framework/`
+### Phase 1 priority (toward Milestone #1 — Sat 2026-08-22)
 
-1. **Sync Steam builds** — Arma Reforger + Arma Reforger Tools must match (mismatches cause vanilla errors like `Tuple2`).
-2. **Base game path** — `bash scripts/setup-workbench-linux.sh` → locate `~/ArmaReforger-Base/data/ArmaReforger.gproj`.
-3. **Open only** `tbd-framework/addon.gproj` — never `Tbd_framework/` (Coalition).
-4. **Verify APIs** via enfusion-mcp before editing `TBD_*.c` (e.g. `RestCallback` — no `SetOnTimeout` on current API).
-5. **POC pass** — attach `TBD_FrameworkManager` + `TBD_RegistryPocComponent`; dedicated server + profile from `scripts/setup-server-profile.sh`.
+Build in this order:
 
-### After Workbench POC
+1. **Spawn + factions** — `SCR_SpawnLogic`, land spawn coords, basic loadouts
+2. **ORBAT enforcement** — poll roster API; reject wrong slot/loadout
+3. **Capture objective** — win condition for internal test
+4. **Stage machine + admin commands** — `#stage next`, safe start, boundary
+5. **Web admin UI** — mission upload, slot assignment, link-code UX
+6. **Results persistence** — wire `POST /api/results` to DB + event page
 
-**Done (Phase 0 → Phase 1 start):**
+### Dedicated server (local dev)
 
-- Schema **v1.0 frozen** — `tbd-schema/VERSION`, `CHANGELOG.md`, registry `guid` accepts full Enfusion ResourceName
-- **Registry POC 0.4** — `registry.vanilla-poc.json`, `tbd-framework/Data/registry.json`, `TBD_Registry.c` + `TBD_RegistryPocComponent.c` (verify in Workbench)
-- **`tbd-framework/` scaffold** — mission loader (REST + profile fallback), stage manager stub, radio bridge stubs
-- **Web Phase 1 API (backend):**
-  - `POST /api/missions` (admin, schema-validated upload)
-  - `POST /api/link` (server token — register 6-digit code)
-  - `POST /api/me/link` (user consumes code)
-  - `GET /api/game/events/{id}/roster` (server token — identityId → slotId)
-  - `PUT /api/admin/events/{id}/slots/{slotId}` (manual ORBAT)
-  - Migration `00004_missions_orbat_identity.sql`
+```bash
+bash scripts/setup-server-profile.sh
+bash scripts/run-dev-server.sh
+```
 
-**Not done (next):**
+Uses `-server {69A85365FC09E2CA}Missions/TBD_Dev_POC.conf` + `-addons B2C3D4E5F6A78901`.  
+**Do not** combine `-config` with `-addons` for unpublished local mods.
 
-- Registry POC **Workbench verification** (human + Enfusion MCP connected)
-- Map tiles **0.3** spike
-- Framework: capture objective, loadouts, ORBAT enforcement in-game, admin chat commands wired
-- Web: upload UI, slot assignment UI, results persistence (still log-only)
-- Milestone #1 date posted in Discord
-- Staging dedicated server soak
+Profile files live under `.local-test-profile/profile/` (Enfusion `$profile:` root).
 
-**Next, in order:**
+### Workbench (when editing scripts)
 
-1. **Confirm Milestone #1 date publicly** in Discord.
-2. **Open `tbd-framework` in Workbench** — run registry POC component; fix `kit:us_sl` GUID from `Character_US_SL.et`.
-3. **Run migration** (`00004`) on dev Postgres; test link + roster flow with curl.
-4. **Framework Phase 1** — spawner, capture zone, roster enforcement calling `GET /api/game/events/{id}/roster`.
-5. **Map tiles 0.3** — Everon ortho pipeline (Phase 2 wizard dependency).
+1. Sync game + Tools Steam builds
+2. `bash scripts/setup-workbench-linux.sh`
+3. Open only `tbd-framework/addon.gproj`
+4. enfusion-mcp before any `.c` edit
 
-Partner runs **Phase 0.2 VOIP spike** in parallel — see `tbd-schema/spikes/voip-spike-brief.md`; fills `voip-capability-matrix.md`.
+### Partner track (parallel)
 
-### Phase 1 (after Phase 0 green)
+Phase 0.2 VOIP spike — [`tbd-schema/spikes/voip-spike-brief.md`](tbd-schema/spikes/voip-spike-brief.md)
 
-**TBD-Framework** (use Enfusion MCP for all code):
+### Milestone #1 gate (see [`MILESTONES.md`](MILESTONES.md))
 
-- State machine: `LOADING → LOBBY → BRIEFING → SAFE_START → LIVE → END → DEBRIEF`
-- Mission loader: REST + `$profile/missions/{id}.json` fallback
-- Registry spawner, capture objective, loadouts, safe start, boundary
-- ORBAT slot enforcement via backend roster
-- Admin commands (`#stage next`, etc.)
-- Radio bridge **stub** (hooks only — partner wires later)
-
-**Web:** JSON upload, events linked to missions, manual ORBAT assignment, identity linking.
-
-**Milestone #1:** 20–40 players, hand-written mission JSON, slots enforce, side wins.
+| Criterion | Status |
+|---|---|
+| Mission loads from backend | ✓ |
+| File fallback | ✓ |
+| Registry POC | ✓ |
+| Slots enforce | ✗ |
+| Side wins | ✗ |
+| Results on event page | ✗ |
+| No Workbench to play | ✗ (blocked on spawn/ORBAT) |
 
 ---
 
@@ -247,18 +276,20 @@ See master plan section 2 for full schema outline example.
 
 ---
 
-## 9. Game server API (to implement)
+## 9. Game server API
 
-| Endpoint | Auth | Purpose |
-|---|---|---|
-| `GET /api/missions/{id}/compiled` | server token | Mission JSON for loader |
-| `GET /api/game/events/{id}/roster` | server token | identityId → slotId map |
-| `POST /api/link` | server token | Bind 6-digit code → game identity |
-| `POST /api/telemetry` | server token | Batched gameplay events |
-| `POST /api/results` | server token | Final mission results |
-| `GET /api/servers/{id}/commands` | server token | Queued admin actions (poll) |
-| `POST /api/missions` (+validate) | user session | Mission publish |
-| `POST /api/events/{id}/slots/{slotId}/claim` | user session | ORBAT slot claim |
+| Endpoint | Auth | Status | Purpose |
+|---|---|---|---|
+| `GET /api/missions/{id}/compiled` | server token | ✓ | Mission JSON for loader |
+| `GET /api/game/events/{id}/roster` | server token | ✓ | identityId → slotId map |
+| `POST /api/link` | server token | ✓ | Bind 6-digit code → game identity |
+| `POST /api/me/link` | user session | ✓ | User consumes link code |
+| `POST /api/missions` | admin | ✓ | Mission publish (schema-validated) |
+| `PUT /api/admin/events/{id}/slots/{slotId}` | admin | ✓ | Manual ORBAT assignment |
+| `POST /api/telemetry` | server token | ✓ (log-only) | Batched gameplay events |
+| `POST /api/results` | server token | ✓ (log-only) | Final mission results |
+| `GET /api/servers/{id}/commands` | server token | ✗ | Queued admin actions (poll) |
+| `POST /api/events/{id}/slots/{slotId}/claim` | user session | ✗ | ORBAT slot claim UI |
 
 ~~`GET /api/entitlements/{identityId}`~~ — removed (no payments).
 
@@ -270,7 +301,7 @@ See master plan section 2 for full schema outline example.
 - Do NOT build in-engine TBD-VON — partner builds external TFAR-like stack
 - Do NOT resume CRF fork (mod-list pruning, CVON strip, TBD branding) as primary path
 - Do NOT guess Enfusion class names — use Enfusion MCP
-- Do NOT start mission wizard before Phase 0 spikes + schema freeze
+- Do NOT start mission wizard before schema freeze (schema is frozen at v1.0.0)
 - Do NOT block Milestone #1 on VOIP
 
 ---
@@ -291,11 +322,14 @@ See master plan section 2 for full schema outline example.
 
 | File | Why |
 |---|---|
-| `tbd-reforger-platform-build-plan.md` | Full schema outline, workstreams, phases, risks |
-| `Tbdevent_Website/internal/server/server.go` | Route registration |
-| `Tbdevent_Website/internal/migrate/migrations/00003_events_announcements.sql` | Current events schema |
-| `Tbd_framework/Scripts/Game/Systems/Core/Managers/PlayerController/Replication/CRF_PlayerRplToAuthorityManager.c` | Example RestApi usage in CRF (reference) |
-| `Tbd_framework/Scripts/Game/Systems/ModdedOverrides/CRF_CVON_GamemodeOverride.c` | How CRF disables CVON — pattern reference for partner VOIP bridge |
+| [`README.md`](README.md) | Project overview + quick start |
+| [`CLAUDE-CODE-START.md`](CLAUDE-CODE-START.md) | Claude Code entry |
+| [`MILESTONES.md`](MILESTONES.md) | Milestone gates |
+| [`scripts/run-dev-server.sh`](scripts/run-dev-server.sh) | Local dedicated server launcher |
+| [`tbd-framework/Prefabs/Systems/TBD_GameMode.et`](tbd-framework/Prefabs/Systems/TBD_GameMode.et) | Game mode prefab |
+| [`Tbdevent_Website/internal/server/server.go`](Tbdevent_Website/internal/server/server.go) | Route registration |
+| [`Tbdevent_Website/internal/migrate/migrations/00004_missions_orbat_identity.sql`](Tbdevent_Website/internal/migrate/migrations/00004_missions_orbat_identity.sql) | Missions + ORBAT schema |
+| [`Tbd_framework/REFERENCE-ONLY.md`](Tbd_framework/REFERENCE-ONLY.md) | Why not to open CRF in Workbench |
 
 ---
 
@@ -310,10 +344,10 @@ See master plan section 2 for full schema outline example.
 
 When starting a new session:
 
-- [ ] Read this file
+- [ ] Read [`CLAUDE-CODE-START.md`](CLAUDE-CODE-START.md) (or this file for full context)
 - [ ] Confirm Enfusion MCP is connected (`/mcp` in Claude Code)
-- [ ] Ask user which Phase 0/1 task to tackle if unclear
-- [ ] For Enfusion work: `api_search` first, then implement
-- [ ] For web work: read existing handler/repository patterns before adding routes
+- [ ] Phase 1 task is clear — default: spawn/factions or ORBAT enforcement
+- [ ] For Enfusion: `api_search` first, then implement in `tbd-framework/` only
+- [ ] For web: read existing handler patterns before adding routes
 - [ ] Do not commit unless user asks
-- [ ] Update this file when completing items from section 7
+- [ ] Update section 6–7 of this file when completing milestones

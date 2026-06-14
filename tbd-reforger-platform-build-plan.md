@@ -437,3 +437,29 @@ The mission library tags each mission with its tier; event pages for Tier 3 miss
 - **Workshop channels:** Dev/Staging/Release copies of each mod for safe iteration.
 - **Safe start:** post-briefing window where damage is disabled while players form up.
 - **Walk-in:** a player without a claimed slot taking an open role at event start.
+
+---
+
+## Appendix B — Implementation status (2026-06-13)
+
+Living snapshot of what exists in the monorepo vs this plan. Update when phases complete.
+
+| Plan item | Status |
+|---|---|
+| GitHub org / monorepo | ✓ `darkforce09/tbd-reforger-platform` |
+| `tbd-schema` v1.0 + golden missions + CI | ✓ |
+| REST spike 0.1 | ✓ HTTP + Enfusion loader |
+| Registry spike 0.4 | ✓ Dedicated server verified |
+| `tbd-framework/` greenfield mod | ✓ Loader, registry, game mode, dev scenario |
+| Website foundation | ✓ Discord auth, events, CMS |
+| Phase 1 game-server API (backend) | ✓ Missions, link, roster, ORBAT slots |
+| Milestone #1 date set | ✓ Website (22 Aug 2026); Discord post pending |
+| Framework MVP (spawn, capture, ORBAT enforce) | In progress |
+| Web admin UI (mission upload, slots) | Not started |
+| Mission wizard (Phase 2) | Not started |
+| VOIP (Phase 3, partner) | Not started |
+| Workshop publish / monetized server gates | Not started |
+
+**Local dev server:** `bash scripts/run-dev-server.sh` (uses `-server` + `-addons`, not `-config` for unpublished mods).
+
+**Handoff docs:** [`README.md`](../README.md) · [`CLAUDE-CODE-START.md`](../CLAUDE-CODE-START.md) · [`MILESTONES.md`](../MILESTONES.md)

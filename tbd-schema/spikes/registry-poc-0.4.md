@@ -1,6 +1,6 @@
 # Registry POC 0.4 — five aliases end to end
 
-**Status:** code ready; verify in Workbench on a dedicated server.
+**Status:** GREEN — verified on Linux dedicated server (2026-06-13).
 
 ## Goal
 
@@ -8,7 +8,7 @@ Prove that Mission JSON registry aliases resolve to spawnable vanilla prefabs in
 
 ## Registry file
 
-[`registry.vanilla-poc.json`](../registry/registry.vanilla-poc.json) maps the five POC aliases to **vanilla** resource names copied from the CRF reference mod (not CRF-owned prefabs).
+[`registry.vanilla-poc.json`](../registry/registry.vanilla-poc.json) maps five POC aliases to **vanilla** resource names.
 
 | Alias | Vanilla resource |
 |---|---|
@@ -18,25 +18,42 @@ Prove that Mission JSON registry aliases resolve to spawnable vanilla prefabs in
 | `veh:m151_mg` | `M151A2_M2HB.et` |
 | `comp:checkpoint_small` | `E_Sandbag_Barricade_US_04.et` |
 
-Shipped inside the mod at `tbd-framework/Data/registry.json` (copy of the POC file).
+Shipped inside the mod at `tbd-framework/Data/registry.json`.
 
 ## Enfusion components
 
 In `tbd-framework/Scripts/Game/TBD/`:
 
-- `TBD_Registry.c` — loads registry JSON, resolves alias → resource name
-- `TBD_RegistryPocComponent.c` — on dedicated server init, spawns all five aliases in a row and logs results
+- `TBD_Registry.c` — loads `$TBD_Framework:Data/registry.json`, falls back to `$profile:TBD_Registry.json`
+- `TBD_RegistryPocComponent.c` — on init, spawns all five aliases in a row and logs results
 
-## Workbench verification checklist
+Attached via `TBD_GameMode.et` prefab on the dev scenario.
 
-1. Open `tbd-framework/addon.gproj` in Workbench.
-2. Add `TBD_RegistryPocComponent` to the scenario game mode entity (or a test world).
-3. Run dedicated server / local MP host.
-4. Confirm log lines: `[TBD] Registry POC spawned kit:us_rifleman …` (five lines, no errors).
-5. Replace `kit:us_sl` GUID with the Workbench “Copy Resource GUID” value for `Character_US_SL.et`.
+## Verification (done)
+
+```bash
+bash scripts/setup-server-profile.sh
+bash scripts/run-dev-server.sh
+```
+
+Log output (`.local-test-profile/logs/.../console.log`):
+
+```
+[TBD] Registry loaded (5 aliases).
+[TBD] Registry POC spawned kit:us_rifleman at <0, 1, 0>
+[TBD] Registry POC spawned comp:checkpoint_small at <8, 1, 0>
+[TBD] Registry POC spawned kit:us_sl at <16, 1, 0>
+[TBD] Registry POC spawned preset:us_army_82nd at <24, 1, 0>
+[TBD] Registry POC spawned veh:m151_mg at <32, 1, 0>
+```
+
+## Remaining cleanup
+
+- Move spawn origin to Eden land coords (currently cosmetic — water at 0,0)
+- Confirm `kit:us_sl` GUID via Workbench “Copy Resource GUID” for `Character_US_SL.et`
 
 ## Pass criteria
 
-- All five aliases resolve (no `unknown alias` errors).
-- At least one character and one vehicle entity exist in the world after init.
-- Golden mission entity block (`veh:m151_mg`, `comp:checkpoint_small`) uses the same registry file.
+- [x] All five aliases resolve (no `unknown alias` errors)
+- [x] Character + vehicle entities exist after init
+- [x] Golden mission entity block uses the same registry file

@@ -1,34 +1,42 @@
-# Claude Code — start here (Workbench first)
+# Claude Code — start here
 
 > **Read this file first** in Claude Code. Supersedes outdated API assumptions from 2023-era training data.
 >
 > **Workspace:** `/home/Samuel/Projects/Arma reforger`  
-> **Last updated:** 2026-06-13
+> **Last updated:** 2026-06-13  
+> **Phase:** 1 (Milestone #1 target: Sat 2026-08-22)
 
 ---
 
-## Critical rule
+## Critical rules
 
-**Never guess Enfusion APIs.** Your training data is ~3 years behind the live game.
-
-Before writing or fixing any `.c` script:
-
-1. Connect **enfusion-mcp** (below).
-2. Run `api_search` / `wiki_read` for the class or method (e.g. `RestCallback`, `JsonLoadContext`).
-3. Match patterns to **current** wiki + index, not CRF samples alone.
-
-CRF (`Tbd_framework/`) is **read-only reference in the editor** — **never open in Workbench**, never add as a dependency.
+1. **Never guess Enfusion APIs.** Training data is ~3 years behind. Use **enfusion-mcp** (`api_search`, `wiki_read`) before every `.c` change.
+2. **Production mod = `tbd-framework/` only.** Vanilla dep `58D0FB3206B6F859`. No Coalition GUIDs.
+3. **`Tbd_framework/` is reference-only** — read patterns in Cursor; **never open in Workbench**, never add as dependency.
 
 ---
 
-## What to open in Workbench
+## What is already done (do not redo)
 
-| Open | Do not open |
-|---|---|
-| `tbd-framework/addon.gproj` | `Tbd_framework/addon.gproj` (60+ Coalition deps) |
-| Base game `ArmaReforger.gproj` | — |
+- Schema v1.0 frozen · registry POC 0.4 · REST spike 0.1
+- Mission loader: `GET /api/missions/{id}/compiled` + `$profile:missions/{id}.json` fallback
+- Dedicated server POC: 5 registry spawns + mission from live API (Linux, `-server` + `-addons`)
+- Web Phase 1 **backend**: link codes, roster, mission publish, ORBAT slot assignment (migration 00004)
+- Dev scenario: `Missions/TBD_Dev_POC.conf` on Eden subscene with `TBD_GameMode.et` prefab
+- Repo on GitHub: `darkforce09/tbd-reforger-platform`
 
-Production mod = **`tbd-framework/`** only. Vanilla dependency: `58D0FB3206B6F859`.
+---
+
+## Phase 1 — what to build next
+
+1. **Player spawn** — `SCR_SpawnLogic`, factions, spawn points on land (not `<0,1,0>`)
+2. **ORBAT enforcement** — `GET /api/game/events/{id}/roster` on join
+3. **Capture / win condition** — at least one objective
+4. **Stage machine** — `LOADING → LOBBY → BRIEFING → SAFE_START → LIVE → END → DEBRIEF`
+5. **Admin commands** — `#stage next`, `#end blufor`, etc.
+6. **Web UI** — mission upload, slot assignment, identity linking (APIs exist)
+
+See [`MILESTONES.md`](MILESTONES.md) for Milestone #1 success criteria.
 
 ---
 
@@ -36,77 +44,60 @@ Production mod = **`tbd-framework/`** only. Vanilla dependency: `58D0FB3206B6F85
 
 ```bash
 cd "/home/Samuel/Projects/Arma reforger"
-
-# One-time: add Enfusion MCP to Claude Code
 claude mcp add --scope user enfusion-mcp -- npx -y enfusion-mcp
-
-# Start session
-claude "Read CLAUDE-CODE-START.md. Help me get Workbench running, then verify RestCallback API before touching TBD_MissionLoader.c"
 ```
 
-Cursor users: same server in `.cursor/mcp.json` (already present).
+Cursor: `.cursor/mcp.json` (enfusion-mcp already configured).
 
 ---
 
-## Step 1 — Sync game and tools (fixes Tuple2 / “Can't initialize game”)
-
-Your Steam builds **must match**. Mismatched game vs Workbench causes vanilla script errors like `Can't find class 'Tuple2'` — not a TBD bug.
+## Step 1 — Workbench (when editing scripts)
 
 ```bash
-# Check build IDs (should be equal or tools TargetBuildID = game buildid)
-grep buildid ~/.local/share/Steam/steamapps/appmanifest_1874880.acf   # Arma Reforger
-grep buildid ~/.local/share/Steam/steamapps/appmanifest_1874910.acf   # Tools
+bash scripts/setup-workbench-linux.sh   # base game symlink for Proton/Linux
 ```
 
-**Action:** In Steam, update **both** Arma Reforger and **Arma Reforger Tools** until Workbench log shows the same major version (not 1.7.0.49 / 2023-05-03).
+| Open | Do not open |
+|---|---|
+| `~/ArmaReforger-Base/data/ArmaReforger.gproj` | — |
+| `tbd-framework/addon.gproj` | `Tbd_framework/addon.gproj` |
 
-Then: launch **Arma Reforger (game)** once → quit → open **Workbench**.
+Sync **Arma Reforger** and **Arma Reforger Tools** to the same Steam build (mismatch → vanilla `Tuple2` errors).
 
 ---
 
-## Step 2 — Base game path (Linux / Proton)
-
-Proton Workbench often cannot browse `~/.local/share/Steam/...`.
+## Step 2 — Dedicated server POC (verify loader + registry)
 
 ```bash
-bash scripts/setup-workbench-linux.sh
+# Install server once: Steam app 1890870
+bash scripts/setup-server-profile.sh     # writes .local-test-profile/profile/*
+bash scripts/run-dev-server.sh           # listens on :2001
 ```
 
-In **Locate base game**, select:
+**Important:** Local mods use `-server` + `-addons`. Do **not** pass `-config` with `-addons` (engine rejects it). Workshop-published mods go in `game.mods` inside config JSON instead.
 
-- **Proton:** `Z:\home\Samuel\ArmaReforger-Base\data\ArmaReforger.gproj`
-- **Linux:** `/home/Samuel/ArmaReforger-Base/data/ArmaReforger.gproj`
+**Profile layout** — `$profile:` maps to `<profileDir>/profile/`:
 
-In launcher: **+ Add Project → Add Existing** → same `ArmaReforger.gproj`, then **`tbd-framework/addon.gproj`**.
-
----
-
-## Step 3 — Server profile (mission loader REST test)
-
-```bash
-bash scripts/setup-server-profile.sh ~/.local/share/ArmaReforger/profile
-# or: bash scripts/setup-server-profile.sh "/home/Samuel/Projects/Arma reforger/.local-test-profile"
+```
+.local-test-profile/profile/
+  TBD_BackendConfig.json
+  TBD_Registry.json          # optional override
+  missions/msn_8f3a2c.json   # cached after REST fetch
 ```
 
-Creates `TBD_BackendConfig.json` + `missions/msn_8f3a2c.json` in that profile.
+**Success log lines:**
 
-Ensure website API is running and `.env` has `GAME_SERVER_TOKENS=dev-server-token-change-in-prod`.
-
----
-
-## Step 4 — First Workbench success criteria
-
-1. Open **TBD_Framework** — scripts compile (no red errors in **TBD/** paths).
-2. If `TBD_MissionLoader.c` fails: **look up `RestCallback` in enfusion-mcp** and fix — do not use 2023 docs.
-3. Attach to GameMode entity:
-   - `TBD_FrameworkManager`
-   - `TBD_RegistryPocComponent`
-4. Load `Missions/TBD_Dev_POC.conf` (or your scenario).
-5. Dedicated host → log shows registry POC spawns + mission load (REST or profile fallback).
+```
+[TBD] Mission loaded from backend: Bridgehead at Levie
+[TBD] Registry loaded (5 aliases).
+[TBD] Registry POC spawned kit:us_rifleman at ...
+(... ×5)
+NETWORK : Starting RPL server, listening on address 0.0.0.0:2001
+```
 
 ---
 
-## Step 5 — Web stack (already running from Cursor work)
+## Step 3 — Web API (already running from prior work)
 
 | Service | URL |
 |---|---|
@@ -115,64 +106,55 @@ Ensure website API is running and `.env` has `GAME_SERVER_TOKENS=dev-server-toke
 | Postgres | `podman start tbdevent-postgres` (port **5433** in `.env`) |
 
 ```bash
-bash scripts/test-phase1-api.sh          # game-server API smoke test
+bash scripts/test-phase1-api.sh
 bash scripts/manual-test.sh              # full suite (needs DB)
 ```
 
-Migration **00004** applied: missions, link codes, ORBAT slots.
+Migration **00004** applied: missions, link codes, game identities, event slot assignments.
 
 ---
 
-## Known script fix (verify API before keeping)
+## Known script notes
 
-`TBD_MissionLoader.c` had `RestCallback.SetOnTimeout` — **removed** (not on current API per CRF usage). Re-verify with enfusion-mcp on your installed version; timeouts may only surface via `SetOnError`.
+- `RestCallback.SetOnTimeout` — **removed** from `TBD_MissionLoader.c` (not on current API)
+- Prefer `JsonLoadContext` over obsolete `SCR_JsonLoadContext` when touching loader
+- `TBD_GameMode.et` prefab includes `RplComponent` — do not duplicate in world layer
 
 ---
 
-## Repo map (after Workbench is green)
+## Repo map
 
 | Path | Purpose |
 |---|---|
-| `tbd-framework/` | **Your Enfusion mod** — all new script work here |
-| `tbd-schema/` | Mission JSON, registry, bridge contract |
-| `Tbdevent_Website/` | Go API + React UI |
-| `Tbd_framework/` | CRF reference — **do not ship, do not open in WB** |
-| `tbd-reforger-platform-build-plan.md` | Full vision (do not edit plan file per user rule) |
-| `CLAUDE-CONTINUATION.md` | Longer context, phases, API table |
-| `MILESTONES.md` | Milestone #1: Sat 2026-08-22 |
+| [`tbd-framework/`](tbd-framework/) | Enfusion mod — all new script work |
+| [`tbd-schema/`](tbd-schema/) | Mission JSON, registry, bridge contract |
+| [`Tbdevent_Website/`](Tbdevent_Website/) | Go API + React UI |
+| [`Tbd_framework/`](Tbd_framework/) | CRF reference — do not ship |
+| [`scripts/`](scripts/) | setup-workbench, setup-server-profile, run-dev-server, tests |
+| [`CLAUDE-CONTINUATION.md`](CLAUDE-CONTINUATION.md) | Full context, API table, team split |
+| [`MILESTONES.md`](MILESTONES.md) | Milestone #1/#2 dates + gates |
+| [`README.md`](README.md) | Project overview |
 
 ---
 
-## Phase order (after Workbench POC)
-
-1. Registry POC spawns 5 aliases in-world  
-2. Mission loader hits `GET /api/missions/{id}/compiled` on dedicated server  
-3. Framework: state machine, spawner, capture, ORBAT enforcement  
-4. Web admin UI for mission upload + slot assignment  
-5. Milestone #1 event (20–40 players)
-
-VOIP = partner track. Mission Wizard = Phase 2.
-
----
-
-## First Claude Code prompt (copy/paste)
+## Suggested first prompt (new Claude chat)
 
 ```
-Read CLAUDE-CODE-START.md and CLAUDE-CONTINUATION.md section 2 (overrides).
+Read CLAUDE-CODE-START.md and CLAUDE-CONTINUATION.md section 7.
 
-Goal: Workbench opens tbd-framework with clean script compile on my Linux/Steam install.
+Phase 1 toward Milestone #1 (2026-08-22). Dedicated server POC is done
+(mission from API + registry ×5). Do NOT redo loader/registry work.
 
-1. Confirm game vs Tools Steam build IDs match; tell me if I need to update.
-2. Walk through base game path + adding tbd-framework/addon.gproj only.
-3. Use enfusion-mcp to verify RestCallback, JsonLoadContext, and Resource.Load before changing any TBD_*.c file.
-4. Fix any remaining compile errors in tbd-framework/ only — no Coalition code.
+Next task: [spawn/factions | ORBAT enforcement | capture objective — pick one]
 
-Do not open or depend on Tbd_framework/.
+Rules:
+- tbd-framework/ only, enfusion-mcp before any .c edit
+- Never open Tbd_framework/ in Workbench
 ```
 
 ---
 
-## Discord / ops (human)
+## Human ops
 
-- Milestone post draft: `docs/discord-milestone-1-post.md`
-- Website announcement already seeded (Sat 22 Aug 2026)
+- Discord post draft: [`docs/discord-milestone-1-post.md`](docs/discord-milestone-1-post.md)
+- Milestone #1 announced on website (Sat 22 Aug 2026) — post Discord when ready
