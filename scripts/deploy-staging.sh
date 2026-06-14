@@ -6,8 +6,11 @@
 #   cd tbd-schema && npm ci
 #
 # Usage:
-#   bash scripts/deploy-staging.sh
+#   bash scripts/deploy-staging.sh                       # mode from deploy.env (default: addons)
 #   bash scripts/deploy-staging.sh --dry-run
+#
+#   # joinable server (after publishing tbd-framework to the Workshop):
+#   TBD_SERVER_MODE=config TBD_WORKSHOP_MOD_ID=<workshopModId> bash scripts/deploy-staging.sh
 #
 # Never rsyncs to /home/sam/prairielearn/
 set -euo pipefail
@@ -47,10 +50,48 @@ source "$ENV_FILE"
 : "${TBD_BIND_IP:=192.168.0.140}"
 : "${TBD_SERVER_DIR:=/home/sam/steam/arma-reforger-server}"
 
+# Server launch mode:
+#   addons  — -server + -addons (local unpublished mod). Runs headless for log
+#             verification (mission load, 18x slot spawn, Stage -> LOBBY) but is
+#             NOT Direct-Joinable: -server+-addons registers no backend room.
+#   config  — -config (server config JSON). Registers a backend room ("Server
+#             registered with address:" / "Direct Join Code:") and IS joinable.
+#             Requires the mod to be PUBLISHED to the Workshop (config game.mods[]
+#             only loads Workshop content; -config is incompatible with -addons),
+#             so TBD_WORKSHOP_MOD_ID must be set to the real Workshop modId.
+: "${TBD_SERVER_MODE:=addons}"
+: "${TBD_WORKSHOP_MOD_ID:=}"
+: "${TBD_PUBLIC_ADDRESS:=${TBD_BIND_IP}}"
+: "${TBD_GAME_PORT:=2001}"
+: "${TBD_A2S_PORT:=17777}"          # MUST differ from TBD_GAME_PORT or replication fails
+: "${TBD_SERVER_NAME:=TBD Staging POC}"
+: "${TBD_ADMIN_PASSWORD:=tbd-admin}"
+: "${TBD_MAX_PLAYERS:=64}"
+: "${TBD_SERVER_CONFIG_REMOTE:=$(dirname "$TBD_PROFILE_DIR")/server.config.json}"
+
 if [[ "$TBD_REMOTE_DIR" == *prairielearn* ]]; then
   echo "Refusing to deploy: TBD_REMOTE_DIR must not be under prairielearn/" >&2
   exit 1
 fi
+
+case "$TBD_SERVER_MODE" in
+  addons) ;;
+  config)
+    if [ -z "$TBD_WORKSHOP_MOD_ID" ]; then
+      echo "TBD_SERVER_MODE=config requires TBD_WORKSHOP_MOD_ID (publish tbd-framework" >&2
+      echo "to the Workshop first, then set its modId in deploy.env)." >&2
+      exit 1
+    fi
+    if [ "$TBD_A2S_PORT" = "$TBD_GAME_PORT" ]; then
+      echo "TBD_A2S_PORT must differ from TBD_GAME_PORT (a2s/game can't share a UDP port)." >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "Invalid TBD_SERVER_MODE='$TBD_SERVER_MODE' (expected: addons | config)" >&2
+    exit 1
+    ;;
+esac
 
 SSH_BASE=(ssh -o StrictHostKeyChecking=no)
 if [ -n "${TBD_SSH_PASS:-}" ]; then
@@ -156,24 +197,68 @@ echo "V4 unauth: HTTP \$code"
 EOF
 fi
 
-echo "==> systemd user service + restart game server"
+# Build ExecStart per mode (NOTE: -config is mutually exclusive with -addons).
+if [ "$TBD_SERVER_MODE" = "config" ]; then
+  EXECSTART="${TBD_SERVER_DIR}/ArmaReforgerServer -profile ${TBD_PROFILE_DIR} -config ${TBD_SERVER_CONFIG_REMOTE} -maxFPS 60 -logStats 30000 -nothrow"
+else
+  EXECSTART="${TBD_SERVER_DIR}/ArmaReforgerServer -profile ${TBD_PROFILE_DIR} -addonsDir ${TBD_ADDONS_STAGING} -addons ${TBD_ADDON_GUID} -server \"${TBD_SCENARIO}\" -bindIP 0.0.0.0 -bindPort ${TBD_GAME_PORT} -a2sPort ${TBD_A2S_PORT} -maxFPS 60 -logStats 30000 -nothrow"
+fi
+
+echo "==> systemd user service + restart game server (mode: $TBD_SERVER_MODE)"
 if [ "$DRY_RUN" -eq 1 ]; then
+  echo "[dry-run] mode=$TBD_SERVER_MODE"
+  [ "$TBD_SERVER_MODE" = "config" ] && echo "[dry-run] render server config -> $TBD_SERVER_CONFIG_REMOTE (modId=$TBD_WORKSHOP_MOD_ID)"
+  echo "[dry-run] ExecStart=$EXECSTART"
   echo "[dry-run] install tbd-reforger.service and restart"
 else
+  # In config mode, render the server config JSON on the host (registers the
+  # backend room; the Workshop mod is downloaded from game.mods[]).
+  if [ "$TBD_SERVER_MODE" = "config" ]; then
+    ssh_cmd "cat > '$TBD_SERVER_CONFIG_REMOTE'" <<EOF
+{
+  "bindAddress": "0.0.0.0",
+  "bindPort": ${TBD_GAME_PORT},
+  "publicAddress": "${TBD_PUBLIC_ADDRESS}",
+  "publicPort": ${TBD_GAME_PORT},
+  "a2s": { "address": "0.0.0.0", "port": ${TBD_A2S_PORT} },
+  "game": {
+    "name": "${TBD_SERVER_NAME}",
+    "password": "",
+    "passwordAdmin": "${TBD_ADMIN_PASSWORD}",
+    "scenarioId": "${TBD_SCENARIO}",
+    "maxPlayers": ${TBD_MAX_PLAYERS},
+    "visible": true,
+    "crossPlatform": false,
+    "gameProperties": {
+      "battlEye": false,
+      "disableThirdPerson": false,
+      "fastValidation": false,
+      "VONDisableUI": false,
+      "VONDisableDirectSpeechUI": false
+    },
+    "mods": [
+      { "modId": "${TBD_WORKSHOP_MOD_ID}", "name": "TBD_Framework" }
+    ]
+  },
+  "operating": { "lobbyPlayerSynchronise": true }
+}
+EOF
+  fi
+
   ssh_cmd bash -s <<EOF
 set -euo pipefail
 UNIT="\$HOME/.config/systemd/user/tbd-reforger.service"
 mkdir -p "\$HOME/.config/systemd/user"
 cat > "\$UNIT" <<'UNITEOF'
 [Unit]
-Description=TBD Arma Reforger dedicated server (TBD_Dev_POC)
+Description=TBD Arma Reforger dedicated server (TBD_Dev_POC, mode=${TBD_SERVER_MODE})
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=${TBD_SERVER_DIR}
-ExecStart=${TBD_SERVER_DIR}/ArmaReforgerServer -profile ${TBD_PROFILE_DIR} -addonsDir ${TBD_ADDONS_STAGING} -addons ${TBD_ADDON_GUID} -server "${TBD_SCENARIO}" -bindIP 0.0.0.0 -bindPort 2001 -a2sPort 17777 -maxFPS 60 -logStats 30000 -nothrow
+ExecStart=${EXECSTART}
 Restart=on-failure
 RestartSec=10
 
