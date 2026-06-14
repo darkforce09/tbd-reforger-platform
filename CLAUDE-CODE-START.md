@@ -31,7 +31,7 @@
 
 ## Phase 1 — what to build next
 
-1. **Staging LAN pass** — unblock Direct Join `192.168.0.140:2001` (see [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md) troubleshooting)
+1. **Staging LAN pass** — Direct Join root cause solved (a2sPort collision + no backend room); now needs **Workshop publish of `tbd-framework` + `-config` mode** to be joinable (see [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md) → "Client join" / Phase B)
 2. **Capture / win condition** — at least one objective
 3. **Full ORBAT enforcement** — roster identity → assigned slot (round-robin works without linking)
 4. **Stage machine** — `LOADING → LOBBY → BRIEFING → SAFE_START → LIVE → END → DEBRIEF`

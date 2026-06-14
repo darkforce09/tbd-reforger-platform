@@ -230,7 +230,7 @@ Partner repo (external): `tbd-voip` — voice client, server, game bridge.
 
 - Framework: full ORBAT enforcement (identity linking), capture objective, admin commands, results POST wiring
 - Web: mission upload UI, slot assignment UI, results on event page
-- Staging LAN join on 192.168.0.140 — server deploy ✓, **client Direct Join still under debug** (see section 10)
+- Staging LAN join on 192.168.0.140 — server deploy ✓, crash + Direct Join root cause **solved** (see section 10); **blocked on Workshop publish** of `tbd-framework` (the only way to run `-config` and be joinable)
 
 ---
 
@@ -282,7 +282,7 @@ Phase 0.2 VOIP spike — [`tbd-schema/spikes/voip-spike-brief.md`](tbd-schema/sp
 | Slots enforce (roster identity) | ✗ |
 | Side wins | ✗ |
 | Results on event page | ✗ |
-| No Workbench to play | ✗ (blocked on staging LAN + capture) |
+| No Workbench to play | ✗ (server crash + Direct Join cause solved; now blocked on Workshop publish + `-config`, then capture) |
 
 ---
 
@@ -330,7 +330,7 @@ Phase A: rsync repo + local mod symlink — no Workshop yet. **Never** deploy un
 | Repo | `/home/sam/tbd/repo` |
 | Profile | `/home/sam/tbd/profile` |
 | Addons staging | `/home/sam/tbd/addons-staging` |
-| Game port | `2001` UDP/TCP — **A2S must be on 2001** for Direct Join (`-a2sPort 2001`) |
+| Game port | `2001` UDP/TCP (game) + **`17777` UDP for A2S** — `a2sPort` must **differ** from `bindPort` or replication fails |
 | API | `127.0.0.1:8080` (Docker on server) |
 | Steam app | **1874900** (stable Arma Reforger Server) — not 1890870 Experimental |
 
@@ -344,23 +344,34 @@ bash scripts/debug-direct-join.sh           # LAN join diagnostics
 
 Full guide: [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md).
 
-**Client join:** `bash scripts/setup-client-addons.sh` → Steam launch options with `-addonsDir` + `-addons B2C3D4E5F6A78901` → Direct Join `192.168.0.140:2001`.
+**Client join:** NOT possible with the local-mod (`-server`+`-addons`) server — see below.
+Joining requires Workshop publish + `-config`. Full guide: [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md) → "Client join".
 
-### LAN join debug status (2026-06-14)
+### LAN join — SOLVED (2026-06-14)
 
-| Check | Status |
-|-------|--------|
-| Server `tbd-reforger.service` active, mission loaded, 18× slot spawn | ✓ |
-| API + roster smoke on server | ✓ |
-| Client mod loads (Proton log shows `B2C3D4E5F6A78901`) | ✓ |
-| Ping PC → server (WiFi vs LAN same `/24`) | ✓ — not an isolation issue |
-| A2S on `:2001` from dev PC | ✓ after `-a2sPort 2001` fix |
-| Client Direct Join end-to-end | **pending user retest** |
-| Steam build match (client vs server `buildid`) | **may differ** — sync via `steamcmd +app_update 1874900 validate` |
+Root cause was two-fold, both verified with runtime evidence:
 
-**Known fix applied:** `-a2sPort 17777` caused **"No server found"** — Direct Join probes game port 2001, not 17777. Unit now uses `-bindIP 0.0.0.0 -a2sPort 2001`.
+1. **Server was crash-looping.** The systemd unit's `-a2sPort 2001` set the A2S query
+   socket to the **same UDP port as the game socket** (2001). They can't share a port →
+   `Starting RPL server … 2001` then `NETWORK (E): Unable to start replication` → `Game
+   destroyed` (exits status 0, so `Restart=on-failure` never fired). **Fixed:** `a2sPort`
+   → **17777** in `deploy/tbd-reforger.service` + `scripts/deploy-staging.sh`. Server now
+   healthy (18× slot spawn, `Stage → LOBBY`).
+2. **`-server`+`-addons` is not Direct-Joinable.** Reforger's Direct Join resolves servers
+   through the **BI backend room registry**, not a raw LAN A2S query. Only `-config` mode
+   registers a room (`Server registered with address:` + `Direct Join Code:`). Confirmed by
+   joining a vanilla `-config` Game Master server by IP from the Proton client. But `-config`
+   **cannot** be combined with `-addons` (engine fatal), and config `mods[]` only loads
+   **Workshop** mods — so `tbd-framework` must be Workshop-published.
 
-**If join still fails after retest:** compare Steam `buildid`, watch server `console.log` during join for connect lines, grep client Proton log for `SERVER_NOT_FOUND` vs version mismatch.
+**Not the problem (all verified fine):** versions match (client+server `1.7.0.49`), mod
+loads, ping/firewall OK, A2S reachable on 17777. Steam `buildid` differs between client app
+(1874880) and server app (1874900) — different apps, so **don't** compare their buildids;
+compare the game **version string** instead.
+
+**Next step (the only remaining gate):** publish `tbd-framework` to the Workshop, set the
+real modId in `scripts/tbd-staging-server.config.json`, switch the server to `-config` mode.
+See `docs/STAGING-SERVER.md` → "Client join" and Phase B.
 
 ---
 

@@ -173,7 +173,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${TBD_SERVER_DIR}
-ExecStart=${TBD_SERVER_DIR}/ArmaReforgerServer -profile ${TBD_PROFILE_DIR} -addonsDir ${TBD_ADDONS_STAGING} -addons ${TBD_ADDON_GUID} -server "${TBD_SCENARIO}" -bindIP 0.0.0.0 -bindPort 2001 -a2sPort 2001 -maxFPS 60 -logStats 30000 -nothrow
+ExecStart=${TBD_SERVER_DIR}/ArmaReforgerServer -profile ${TBD_PROFILE_DIR} -addonsDir ${TBD_ADDONS_STAGING} -addons ${TBD_ADDON_GUID} -server "${TBD_SCENARIO}" -bindIP 0.0.0.0 -bindPort 2001 -a2sPort 17777 -maxFPS 60 -logStats 30000 -nothrow
 Restart=on-failure
 RestartSec=10
 

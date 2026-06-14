@@ -28,7 +28,7 @@ flowchart TB
 
 | Service | Bind | Notes |
 |---------|------|-------|
-| Game server | `0.0.0.0:2001` UDP + TCP | LAN clients; **A2S on same port** (Direct Join probes `:2001`) |
+| Game server | `0.0.0.0:2001` UDP + TCP | game traffic; **A2S query is a SEPARATE port — `17777`** (never set `a2sPort` = `bindPort`, it breaks replication) |
 | API | `127.0.0.1:8080` | Game server on same host; smoke via SSH `curl` |
 | Postgres | `127.0.0.1:5432` | Docker internal hostname `postgres` for API container |
 
@@ -178,9 +178,10 @@ Flow: validate mission JSON → rsync → profile + addon symlink → Docker reb
 | V2 API mission | SSH: `curl -sf -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/missions/msn_8f3a2c/compiled` | HTTP 200 |
 | V3 Roster | SSH: `curl -sf -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/game/events/b0000000-0000-4000-8000-000000000001/roster` | HTTP 200 |
 | V4 Auth gate | SSH: unauthenticated compiled URL | HTTP 401 |
-| V5 Game listening | SSH: `ss -ulnp \| grep 2001` or log `listening on address 0.0.0.0:2001` | yes |
+| V5 Game listening | SSH: `ss -ulnp \| grep -E '2001\|17777'` — **both** game (2001) and A2S (17777) bound | yes |
 | V6 Game logs | `bash scripts/remote-log-grep.sh` | see below |
-| V7 Client join | Direct Connect `192.168.0.140:2001` + **local** mod | spawn at slot + kit |
+| V7 Server healthy (not crashed) | log has `Stage → LOBBY` and **no** `Unable to start replication` | yes |
+| V8 Client join | `-config` + **Workshop** mod only (see "Client join"); log shows `Server registered with address:`, then Direct Connect `192.168.0.140:2001` | spawn at slot + kit |
 
 ### Game log pass criteria
 
@@ -197,39 +198,55 @@ Flow: validate mission JSON → rsync → profile + addon symlink → Docker reb
 
 ---
 
-## Client join (Phase A)
+## Client join — REQUIRES Workshop publish + `-config` (verified 2026-06-14)
 
-1. **Mod on client (Steam / Proton):**
-   ```bash
-   bash scripts/setup-client-addons.sh
-   ```
-   Steam → Arma Reforger → Properties → Launch Options:
-   ```
-   -addonsDir "/home/Samuel/.local/share/tbd-server-addons" -addons B2C3D4E5F6A78901
-   ```
-   Verify in latest Proton client log (`compatdata/1874880/.../ArmaReforger/logs/logs_*/console.log`):
-   `gproj: '.../tbd-framework/addon.gproj' guid: 'B2C3D4E5F6A78901'`.
+> **A local-`-addons` server is NOT Direct-Joinable.** Reforger's Direct Join resolves
+> servers through the **Bohemia backend room registry**, not a raw LAN A2S query. Only a
+> server launched with **`-config`** registers a joinable room (logs `Server registered
+> with address:` + `Direct Join Code:`). The Phase A `-server`+`-addons` launch starts a
+> server but registers **no room**, so Direct Join always returns "No server found" — even
+> when the server is healthy, A2S-reachable, and version-matched. And `-config` **cannot be
+> combined with `-addons`** (engine fatal: `-config cannot be used together with addons!`),
+> and a config `game.mods[]` entry only loads **Workshop-published** mods. So the mod must
+> be on the Workshop.
 
-2. **Connect:** Multiplayer → **V** Direct Join → IP `192.168.0.140`, port `2001`.
+**To make the modded server joinable:**
 
-3. **Version:** Client and server **Steam build IDs** must match (UI version `1.7.0.x` alone is not enough):
-   ```bash
-   grep buildid ~/.local/share/Steam/steamapps/appmanifest_1874880.acf   # client game
-   grep buildid ~/.local/share/Steam/steamapps/appmanifest_1874900.acf   # server (dev PC copy)
-   ```
-   On server: `steamcmd +app_update 1874900 validate`, then rsync binary to `192.168.0.140` if needed.
+1. **Publish `tbd-framework` to the Workshop** (Workbench → Resource Manager → publish
+   `addon.gproj`; a Dev/unlisted version is fine). This mints a real **Workshop modId**
+   (≠ the local GUID `B2C3D4E5F6A78901`).
+2. In `scripts/tbd-staging-server.config.json`, set `game.mods[0].modId` to that Workshop
+   modId; keep `scenarioId` = `{69A85365FC09E2CA}Missions/TBD_Dev_POC.conf` and `a2s.port`
+   **17777**.
+3. Run the server with **`-config <that json>`** (NO `-addons`). It downloads the mod and
+   registers a room.
+4. **Client:** Multiplayer → **V** Direct Join → IP `192.168.0.140`, port `2001` (or paste
+   the server's **Direct Join Code** from its log). Clients auto-download the Workshop mod.
 
-4. **Firewall:** UDP and TCP **2001** open on server (`ufw` / `firewall-cmd`). WiFi vs ethernet on same `/24` is fine if ping works.
+**Version:** client and server game versions must match (both report `1.7.0.x` in the A2S
+reply / `Creating game instance … version 1.7.0.x`). Note: Steam `buildid` differs between
+the client app (1874880) and the server app (1874900) — they are different apps, so do
+**not** compare their buildids; compare the game **version string** instead.
 
-### Game server CLI (Phase A)
+**Firewall:** open UDP+TCP **2001** (game) and UDP **17777** (A2S) on the server. WiFi vs
+ethernet on the same `/24` is fine if `ping` works (a WiFi server just shows a "High ping
+server" warning on join).
 
-Phase A uses **`-server` + `-addons`** (not `-config` — that breaks unpublished local mods):
+### Game server CLI
 
 ```
--bindIP 0.0.0.0 -bindPort 2001 -a2sPort 2001
+-bindIP 0.0.0.0 -bindPort 2001 -a2sPort 17777     # a2sPort MUST differ from bindPort
 ```
 
-**Critical:** Direct Join probes the **game port** (`2001`) for A2S discovery. If `-a2sPort 17777` is set, the client shows **"No server found"** even when the server is running. `scripts/tbd-staging-server.config.json` still lists `17777` for future Phase B `-config` mode only.
+**Critical:** `a2sPort` and `bindPort` are **separate UDP sockets and must not be equal.**
+Setting `-a2sPort 2001` (= game port) makes the engine log `Starting RPL server, listening
+on 0.0.0.0:2001` then immediately `NETWORK (E): Unable to start replication` → `Unable to
+initialize the game` → `Game destroyed` (exits status 0, so `Restart=on-failure` does NOT
+restart it). Standard Reforger layout: **2001 game / 17777 A2S / 19999 RCON.**
+
+`-server` + `-addons` (local mod, current `tbd-reforger.service`) is useful for headless
+**log verification** (mission load, 18× slot spawn, `Stage → LOBBY`) but is **not joinable**
+— see the box above. Joining needs the `-config` + Workshop path.
 
 ---
 
@@ -255,9 +272,10 @@ Or: `bash scripts/tbd-spawn-verify.sh`
 
 | Symptom | Fix |
 |---------|-----|
-| **Direct Join "No server found"** | Run `bash scripts/debug-direct-join.sh` — A2S must respond on **2001** from dev PC. Fix: `-a2sPort 2001` in `tbd-reforger.service`, restart server. |
-| A2S OK on 17777 but not 2001 | Same as above — wrong discovery port for Direct Join |
-| WiFi server + LAN client | Usually **not** the issue if same subnet and `ping 192.168.0.140` works |
+| **Direct Join "No server found"** | Expected with `-server`+`-addons` (no backend room). Direct Join needs a server launched with **`-config`** so it registers a room (`Server registered with address:` in the log). See "Client join" above — requires Workshop publish. |
+| Server dies with `Unable to start replication` | `a2sPort` equals `bindPort` (e.g. both `2001`). Set `-a2sPort 17777` (≠ game port) and restart. The `Starting RPL server … 2001` line is printed even on this failure — check for the `(E)` line right after. |
+| Server exits but systemd won't restart it | Failed init exits **status 0**, so `Restart=on-failure` ignores it. Fix the underlying error (usually the a2sPort collision above). |
+| WiFi server + LAN client | Not the issue if same subnet and `ping 192.168.0.140` works — a WiFi host just triggers a "High ping server" warning on join. |
 | API 401 on mission | `TBD_GAME_SERVER_TOKEN` ≠ `GAME_SERVER_TOKENS` in server `.env` / `TBD_BackendConfig.json` |
 | API won't start | Check `docker compose logs api`; `DATABASE_URL` must use hostname `postgres` inside container |
 | Port 8080 in use | Remap in `docker-compose.staging.yml` (e.g. `8081:8080`) |
@@ -286,11 +304,21 @@ grep -E 'SEARCHING_SERVER|SERVER_NOT_FOUND|MANUAL_CONNECT|connect' "$LOG"
 
 ---
 
-## Phase B (deferred)
+## Phase B — REQUIRED for any client join (no longer optional)
 
-- Workshop Dev publish
-- `-config` server mode (`scripts/tbd-dev-server.config.json` — BattlEye, admin password)
-- Public internet / TLS / Discord OAuth on staging
+Verified 2026-06-14: clients can only Direct Join a server that registers a backend room,
+which only `-config` mode does. So these are prerequisites to a playable client, not "nice
+to have later":
+
+- **Workshop Dev publish** of `tbd-framework` → real Workshop modId (≠ local GUID).
+- **`-config` server mode** (`scripts/tbd-staging-server.config.json`) referencing that
+  Workshop modId; `a2s.port` 17777, `battlEye:false`. Switch `tbd-reforger.service` /
+  `deploy-staging.sh` from `-server`+`-addons` to `-config`.
+- Public internet / TLS / Discord OAuth on staging (still genuinely deferred).
+
+A vanilla `-config` server (Game Master Arland) was confirmed Direct-Joinable by IP from the
+Proton client on 2026-06-14 — proving the LAN, firewall, version, and backend connectivity
+are all fine; the only gap is publishing the mod.
 
 ---
 
