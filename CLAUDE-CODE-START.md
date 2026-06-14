@@ -31,7 +31,7 @@
 
 ## Phase 1 — what to build next
 
-1. **Staging LAN pass** — Direct Join root cause solved (a2sPort collision + no backend room); now needs **Workshop publish of `tbd-framework` + `-config` mode** to be joinable (see [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md) → "Client join" / Phase B)
+1. ~~**Staging LAN pass**~~ ✓ DONE 2026-06-14 — `tbd-framework` published to Workshop, staging runs `-config` mode, client Direct-Joined and spawned at a slot (see [`docs/STAGING-SERVER.md`](docs/STAGING-SERVER.md) → "Client join")
 2. **Capture / win condition** — at least one objective
 3. **Full ORBAT enforcement** — roster identity → assigned slot (round-robin works without linking)
 4. **Stage machine** — `LOADING → LOBBY → BRIEFING → SAFE_START → LIVE → END → DEBRIEF`

@@ -230,7 +230,7 @@ Partner repo (external): `tbd-voip` — voice client, server, game bridge.
 
 - Framework: full ORBAT enforcement (identity linking), capture objective, admin commands, results POST wiring
 - Web: mission upload UI, slot assignment UI, results on event page
-- Staging LAN join on 192.168.0.140 — server deploy ✓, crash + Direct Join root cause **solved** (see section 10); **blocked on Workshop publish** of `tbd-framework` (the only way to run `-config` and be joinable)
+- ~~Staging LAN join on 192.168.0.140~~ **DONE 2026-06-14** — `tbd-framework` published to Workshop (modId = gproj GUID `B2C3D4E5F6A78901`), staging runs `-config` mode, client Direct-Joined and spawned at a US slot (server logged authenticated player + faction join). See section 10.
 
 ---
 
@@ -242,7 +242,7 @@ Partner repo (external): `tbd-voip` — voice client, server, game bridge.
 
 Build in this order:
 
-1. **Staging LAN join** — unblock Direct Join `192.168.0.140:2001` (see section 10); then confirm slot spawn from client
+1. ~~**Staging LAN join**~~ ✓ DONE 2026-06-14 — client Direct-Joined the `-config` + Workshop-mod server and spawned at a slot (section 10)
 2. **Capture objective** — win condition for internal test
 3. **Full ORBAT enforcement** — identity linking + roster slot assignment (round-robin spawn works today)
 4. **Stage machine + admin commands** — `#stage next`, safe start, boundary
@@ -282,7 +282,7 @@ Phase 0.2 VOIP spike — [`tbd-schema/spikes/voip-spike-brief.md`](tbd-schema/sp
 | Slots enforce (roster identity) | ✗ |
 | Side wins | ✗ |
 | Results on event page | ✗ |
-| No Workbench to play | ✗ (server crash + Direct Join cause solved; now blocked on Workshop publish + `-config`, then capture) |
+| No Workbench to play | ✓ — staging dedicated server (`-config` + Workshop mod) Direct-Joinable; client spawned at slot 2026-06-14 |
 
 ---
 
@@ -369,9 +369,15 @@ loads, ping/firewall OK, A2S reachable on 17777. Steam `buildid` differs between
 (1874880) and server app (1874900) — different apps, so **don't** compare their buildids;
 compare the game **version string** instead.
 
-**Next step (the only remaining gate):** publish `tbd-framework` to the Workshop, set the
-real modId in `scripts/tbd-staging-server.config.json`, switch the server to `-config` mode.
-See `docs/STAGING-SERVER.md` → "Client join" and Phase B.
+**DONE 2026-06-14:** `tbd-framework` published to the (stable) Workshop — in Reforger the
+Workshop **modId is the gproj GUID**, so modId = `B2C3D4E5F6A78901`. Staging now runs
+`-config` mode (`deploy.env`: `TBD_SERVER_MODE=config`, `TBD_WORKSHOP_MOD_ID=B2C3D4E5F6A78901`):
+the server downloaded the Workshop mod, loaded the TBD scenario (18× slot spawn), registered
+a backend room, and a Proton client **Direct-Joined by IP and spawned at a US slot** (server
+logged `Authenticated player … name=Darkforce` + faction join). Clients must use the Workshop
+mod — **remove** any old `-addonsDir … -addons B2C3D4E5F6A78901` launch options (local unsigned
+copy won't hash-match → mod-mismatch). First join may stall on "Downloading required mods";
+Cancel + Direct Join again connects. See `docs/STAGING-SERVER.md` → "Client join".
 
 ---
 
